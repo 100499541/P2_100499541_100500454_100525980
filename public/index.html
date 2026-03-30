@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GestureSlides</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0f0f1a;
+            color: white;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+
+        h1 span {
+            color: #7c6af7;
+        }
+
+        p {
+            color: #aaa;
+            font-size: 1rem;
+        }
+
+        .cards {
+            display: flex;
+            gap: 30px;
+        }
+
+        .card {
+            background: #1a1a2e;
+            border: 2px solid #2a2a4a;
+            border-radius: 16px;
+            padding: 40px 50px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .card:hover {
+            border-color: #7c6af7;
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(124, 106, 247, 0.3);
+        }
+
+        .card .icon {
+            font-size: 3rem;
+        }
+
+        .card h2 {
+            font-size: 1.3rem;
+        }
+
+        .card p {
+            font-size: 0.85rem;
+            max-width: 180px;
+        }
+
+        .card.presenter {
+            border-color: #7c6af7;
+        }
+
+        .card.presenter:hover {
+            box-shadow: 0 8px 30px rgba(124, 106, 247, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div style="text-align:center">
+        <h1>Gesture<span>Slides</span></h1>
+        <p>Sistema de presentación por gestos y voz</p>
+    </div>
+
+    <div class="cards">
+        <a href="/presenter" class="card presenter">
+            <div class="icon">🎤</div>
+            <h2>Presentador</h2>
+            <p>Controla la presentación con gestos y voz</p>
+        </a>
+
+        <a href="/audience" class="card">
+            <div class="icon">👥</div>
+            <h2>Espectador</h2>
+            <p>Sigue la presentación e interactúa desde tu dispositivo</p>
+        </a>
+    </div>
+</body>
+</html>

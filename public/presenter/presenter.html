@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GestureSlides - Presentador</title>
+    <link rel="stylesheet" href="presenter.css">
+</head>
+<body>
+
+    <!-- PANEL PRINCIPAL -->
+    <div id="app">
+
+        <!-- BARRA SUPERIOR -->
+        <header id="topbar">
+            <span id="title">🎤 GestureSlides</span>
+            <div id="controls">
+                <button id="btn-start" onclick="togglePresentation()">▶ Iniciar</button>
+                <button id="btn-voice" onclick="toggleVoice()">🎙 Voz</button>
+                <button id="btn-fullscreen" onclick="toggleFullscreen()">⛶ Pantalla completa</button>
+            </div>
+            <div id="status">
+                <span id="status-gesture">👋 Gestos: OFF</span>
+                <span id="status-voice">🎙 Voz: OFF</span>
+                <span id="slide-counter">0 / 0</span>
+            </div>
+        </header>
+
+        <!-- ÁREA DE DIAPOSITIVA -->
+        <main id="slide-area">
+            <div id="slide-container">
+                <img id="slide-img" src="" alt="Diapositiva" draggable="false"/>
+                <div id="pointer-dot" style="display:none"></div>
+                <div id="zoom-overlay" style="display:none"></div>
+            </div>
+
+            <!-- FEED DE CÁMARA (esquina inferior izquierda) -->
+            <video id="camera-feed" autoplay muted playsinline></video>
+            <canvas id="gesture-canvas"></canvas>
+        </main>
+
+        <!-- PANEL LATERAL -->
+        <aside id="sidebar">
+            <h3>Notificaciones</h3>
+            <div id="notifications"></div>
+
+            <h3 style="margin-top:20px">Manos levantadas</h3>
+            <div id="hands-list"></div>
+
+            <h3 style="margin-top:20px">Log de comandos</h3>
+            <div id="command-log"></div>
+        </aside>
+
+    </div>
+
+    <!-- OVERLAY DE VOZ -->
+    <div id="voice-overlay" style="display:none">
+        <div id="voice-box">
+            <div id="voice-icon">🎙</div>
+            <div id="voice-text">Escuchando...</div>
+            <div id="voice-result"></div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/socket-client.js"></script>
+    <script src="presenter.js"></script>
+
+</body>
+</html>
