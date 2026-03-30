@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Audience View</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="audience.css">
+
+    <!-- Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div id="app">
+
+        <!-- SLIDE -->
+        <div id="slide-container">
+            <img id="slide-image" src="" alt="Slide">
+            
+            <!-- PUNTERO -->
+            <div id="pointer"></div>
+
+            <!-- CAPA DE DIBUJO -->
+            <canvas id="draw-canvas"></canvas>
+        </div>
+
+        <!-- SUBTÍTULOS -->
+        <div id="subtitle-bar">
+            <span id="subtitle-text"></span>
+        </div>
+
+        <!-- ENCUESTAS -->
+        <div id="poll-container" class="hidden">
+            <h3 id="poll-question"></h3>
+            <div id="poll-options"></div>
+        </div>
+
+        <!-- RESULTADOS ENCUESTA -->
+        <div id="poll-results" class="hidden"></div>
+
+        <!-- CONTROLES DEL USUARIO -->
+        <div id="controls">
+            <button id="raise-hand-btn">✋ Levantar mano</button>
+        </div>
+
+    </div>
+
+    <!-- JS -->
+    <script src="audience.js"></script>
+
+</body>
+</html>

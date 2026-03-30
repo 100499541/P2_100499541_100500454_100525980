@@ -161,11 +161,14 @@ io.on('connection', (socket) => {
     // ─── ESPECTADORES ─────────────────────────────────────────
 
     socket.on('raise-hand', (data) => {
-        if (!presentationState.handRaised.includes(socket.id)) {
-            presentationState.handRaised.push(socket.id);
+        if (!data || !data.name) {
+            console.log("⚠️ Usuario sin nombre levantó la mano");
         }
-        io.emit('hand-raised', { userId: socket.id, name: data.name });
-        console.log(`Mano levantada: ${socket.id}`);
+
+        io.emit('hand-raised', {
+            userId: socket.id,
+            name: data?.name || "Anónimo"
+        });
     });
 
     socket.on('lower-hand', () => {
