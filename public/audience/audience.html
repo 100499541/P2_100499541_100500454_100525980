@@ -2,54 +2,89 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Audience View</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <!-- CSS -->
+    <title>GestureSlides - Espectador</title>
     <link rel="stylesheet" href="audience.css">
-
-    <!-- Socket.IO -->
-    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 
-    <!-- CONTENEDOR PRINCIPAL -->
     <div id="app">
 
-        <!-- SLIDE -->
-        <div id="slide-container">
-            <img id="slide-image" src="" alt="Slide">
-            
-            <!-- PUNTERO -->
-            <div id="pointer"></div>
+        <!-- BARRA SUPERIOR -->
+        <header id="topbar">
+            <span id="title">👥 GestureSlides — Espectador</span>
+            <div id="topbar-right">
+                <span id="slide-counter">0 / 0</span>
+                <span id="status-hand">✋ Mano: OFF</span>
+                <button id="btn-hand" onclick="toggleHandRaise()">✋ Levantar mano</button>
+                <button id="btn-fullscreen" onclick="toggleFullscreen()">⛶ Pantalla completa</button>
+            </div>
+        </header>
 
-            <!-- CAPA DE DIBUJO -->
-            <canvas id="draw-canvas"></canvas>
-        </div>
+        <!-- ÁREA PRINCIPAL -->
+        <main id="main-area">
 
-        <!-- SUBTÍTULOS -->
-        <div id="subtitle-bar">
-            <span id="subtitle-text"></span>
-        </div>
+            <!-- COLUMNA IZQUIERDA: diapositiva -->
+            <div id="slide-section">
+                <div id="slide-container">
+                    <img id="slide-img" src="" alt="Esperando presentación..."/>
+                    <canvas id="draw-canvas"></canvas>
+                    <div id="pointer-dot" style="display:none"></div>
+                    <div id="zoom-overlay" style="display:none"></div>
+                    <div id="subtitle-bar" style="display:none">
+                        <span id="subtitle-text"></span>
+                    </div>
+                </div>
 
-        <!-- ENCUESTAS -->
-        <div id="poll-container" class="hidden">
-            <h3 id="poll-question"></h3>
-            <div id="poll-options"></div>
-        </div>
+                <!-- ENCUESTA -->
+                <div id="poll-section" style="display:none">
+                    <div id="poll-question"></div>
+                    <div id="poll-options"></div>
+                    <div id="poll-results"></div>
+                    <div id="poll-voted-msg" style="display:none">✅ Voto registrado</div>
+                </div>
+            </div>
 
-        <!-- RESULTADOS ENCUESTA -->
-        <div id="poll-results" class="hidden"></div>
+            <!-- COLUMNA DERECHA: cámara + estado -->
+            <div id="sidebar">
+                <h3>Tu cámara</h3>
+                <div id="camera-wrap">
+                    <video id="camera-feed" autoplay muted playsinline></video>
+                    <canvas id="gesture-canvas"></canvas>
+                </div>
+                <p id="gesture-hint">Levanta la mano para pedir turno</p>
 
-        <!-- CONTROLES DEL USUARIO -->
-        <div id="controls">
-            <button id="raise-hand-btn">✋ Levantar mano</button>
-        </div>
+                <h3 style="margin-top:20px">Estado</h3>
+                <div id="status-list">
+                    <div class="status-item" id="status-presenting">⏸ Presentación no iniciada</div>
+                    <div class="status-item" id="status-gesture-detect">👋 Detección: OFF</div>
+                </div>
+
+                <h3 style="margin-top:20px">Notificaciones</h3>
+                <div id="notifications"></div>
+            </div>
+
+        </main>
 
     </div>
 
-    <!-- JS -->
-    <script src="audience.js"></script>
+    <!-- MODAL: introducir nombre -->
+    <div id="name-modal">
+        <div id="name-box">
+            <div id="name-icon">👤</div>
+            <h2>¿Cómo te llamas?</h2>
+            <p>Tu nombre aparecerá cuando levantes la mano</p>
+            <input id="name-input" type="text" placeholder="Tu nombre..." maxlength="30" />
+            <button onclick="confirmName()">Entrar</button>
+        </div>
+    </div>
 
+    <!-- SCRIPTS -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/socket-client.js"></script>
+    <script src="audience.js"></script>
 </body>
 </html>

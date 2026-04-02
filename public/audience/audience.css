@@ -1,154 +1,438 @@
-/* RESET */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
 
-/* BASE */
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #0f172a; /* azul oscuro */
-    color: #e2e8f0;
+    font-family: 'Segoe UI', sans-serif;
+    background: #0f0f1a;
+    color: white;
+    height: 100vh;
     overflow: hidden;
 }
 
-/* CONTENEDOR PRINCIPAL */
+/* ─── LAYOUT ─────────────────────────────────────────────── */
 #app {
-    width: 100vw;
+    display: grid;
+    grid-template-rows: 60px 1fr;
     height: 100vh;
-    position: relative;
 }
 
-/* SLIDE */
+/* ─── TOPBAR ─────────────────────────────────────────────── */
+#topbar {
+    background: #1a1a2e;
+    border-bottom: 1px solid #2a2a4a;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+}
+
+#title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #7c6af7;
+}
+
+#topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 0.85rem;
+}
+
+#slide-counter {
+    font-weight: 700;
+    color: white;
+}
+
+#status-hand {
+    color: #aaa;
+    transition: color 0.3s;
+}
+
+#status-hand.active {
+    color: #f39c12;
+}
+
+#topbar-right button {
+    background: #2a2a4a;
+    color: white;
+    border: 1px solid #3a3a6a;
+    border-radius: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+#topbar-right button:hover {
+    background: #7c6af7;
+    border-color: #7c6af7;
+}
+
+#btn-hand.active {
+    background: #f39c12;
+    border-color: #f39c12;
+}
+
+/* ─── MAIN AREA ───────────────────────────────────────────── */
+#main-area {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    overflow: hidden;
+}
+
+/* ─── SECCIÓN DIAPOSITIVA ─────────────────────────────────── */
+#slide-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: #0a0a14;
+    padding: 20px;
+    overflow: hidden;
+}
+
 #slide-container {
+    position: relative;
+    width: 100%;
+    max-width: 900px;
+    aspect-ratio: 16/9;
+    background: #1a1a2e;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 0 40px rgba(124, 106, 247, 0.15);
+}
+
+#slide-img {
     width: 100%;
     height: 100%;
-    position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-#slide-image {
-    max-width: 100%;
-    max-height: 100%;
     object-fit: contain;
-    border-radius: 12px;
-    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+    display: block;
 }
 
-/* PUNTERO */
-#pointer {
-    position: absolute;
-    width: 15px;
-    height: 15px;
-    background-color: red;
-    border-radius: 50%;
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-    display: none;
-    box-shadow: 0 0 10px red;
-}
-
-/* CANVAS DIBUJO */
+/* ─── CANVAS DE DIBUJO ────────────────────────────────────── */
 #draw-canvas {
     position: absolute;
-    top: 0;
-    left: 0;
+    inset: 0;
     width: 100%;
     height: 100%;
+    border-radius: 8px;
+    z-index: 5;
+    pointer-events: none;
 }
 
-/* SUBTÍTULOS */
-#subtitle-bar {
+/* ─── PUNTERO ─────────────────────────────────────────────── */
+#pointer-dot {
     position: absolute;
-    bottom: 0;
-    width: 100%;
-    background: rgba(15, 23, 42, 0.85);
-    padding: 15px;
-    text-align: center;
-    font-size: 1.2rem;
-    border-top: 1px solid rgba(255,255,255,0.1);
-}
-
-#subtitle-text {
-    color: #38bdf8; /* azul claro */
-}
-
-/* ENCUESTAS */
-#poll-container {
-    position: absolute;
-    top: 50%;
-    left: 50%;
+    width: 24px;
+    height: 24px;
+    background: rgba(124, 106, 247, 0.8);
+    border-radius: 50%;
+    border: 2px solid white;
     transform: translate(-50%, -50%);
-    background: #1e293b;
-    padding: 25px;
-    border-radius: 16px;
-    box-shadow: 0 0 30px rgba(0,0,0,0.7);
-    width: 90%;
-    max-width: 400px;
-    text-align: center;
+    pointer-events: none;
+    box-shadow: 0 0 12px rgba(124, 106, 247, 0.6);
+    transition: left 0.05s, top 0.05s;
     z-index: 10;
 }
 
-#poll-container h3 {
-    margin-bottom: 20px;
+/* ─── ZOOM OVERLAY ────────────────────────────────────────── */
+#zoom-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(124, 106, 247, 0.1);
+    border: 2px solid #7c6af7;
+    pointer-events: none;
+    z-index: 6;
+}
+
+/* ─── SUBTÍTULOS ──────────────────────────────────────────── */
+#subtitle-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.75);
+    color: white;
+    text-align: center;
+    padding: 10px 20px;
+    font-size: 1.1rem;
+    z-index: 20;
+    border-radius: 0 0 8px 8px;
+    min-height: 44px;
+}
+
+/* ─── ENCUESTA ────────────────────────────────────────────── */
+#poll-section {
+    width: 100%;
+    max-width: 900px;
+    background: #1a1a2e;
+    border: 1px solid #2a2a4a;
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#poll-question {
+    font-size: 1rem;
+    font-weight: 700;
+    color: white;
+}
+
+#poll-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 #poll-options button {
-    width: 100%;
-    padding: 12px;
-    margin: 8px 0;
-    border: none;
-    border-radius: 10px;
-    background: #334155;
-    color: #e2e8f0;
+    background: #2a2a4a;
+    color: white;
+    border: 1px solid #3a3a6a;
+    border-radius: 8px;
+    padding: 8px 18px;
     cursor: pointer;
-    transition: 0.2s;
+    font-size: 0.9rem;
+    transition: all 0.2s;
 }
 
 #poll-options button:hover {
-    background: #38bdf8;
-    color: #0f172a;
+    background: #7c6af7;
+    border-color: #7c6af7;
 }
 
-/* RESULTADOS */
-#poll-results {
+#poll-options button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Resultados de la encuesta */
+.poll-result-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 0.82rem;
+}
+
+.poll-option-label {
+    width: 70px;
+    color: #ccc;
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.poll-bar-wrap {
+    flex: 1;
+    background: #2a2a4a;
+    border-radius: 4px;
+    height: 10px;
+    overflow: hidden;
+}
+
+.poll-bar {
+    height: 100%;
+    background: #7c6af7;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+.poll-count {
+    width: 70px;
+    color: #aaa;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.poll-total {
+    font-size: 0.75rem;
+    color: #7c6af7;
+    text-align: right;
+    margin-top: 4px;
+}
+
+#poll-voted-msg {
+    font-size: 0.85rem;
+    color: #27ae60;
+    font-weight: 600;
+}
+
+/* ─── SIDEBAR ─────────────────────────────────────────────── */
+#sidebar {
+    background: #1a1a2e;
+    border-left: 1px solid #2a2a4a;
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+#sidebar h3 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #7c6af7;
+    margin-bottom: 10px;
+}
+
+/* ─── CÁMARA ──────────────────────────────────────────────── */
+#camera-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid #2a2a4a;
+    background: #0a0a14;
+}
+
+#camera-feed {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#gesture-canvas {
     position: absolute;
-    top: 20px;
-    right: 20px;
-    background: #1e293b;
-    padding: 15px;
-    border-radius: 12px;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+#gesture-hint {
+    font-size: 0.78rem;
+    color: #888;
+    text-align: center;
+    margin-top: 8px;
+}
+
+/* ─── ESTADO ──────────────────────────────────────────────── */
+#status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.status-item {
+    font-size: 0.8rem;
+    color: #aaa;
+    padding: 6px 10px;
+    background: #2a2a4a;
+    border-radius: 6px;
+}
+
+#status-presenting.active {
+    color: #27ae60;
+    border-left: 3px solid #27ae60;
+}
+
+#status-gesture-detect.active {
+    color: #f39c12;
+    border-left: 3px solid #f39c12;
+}
+
+/* ─── NOTIFICACIONES ──────────────────────────────────────── */
+#notifications {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.notification {
+    background: #2a2a4a;
+    border-left: 3px solid #7c6af7;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    animation: fadeIn 0.3s ease;
+}
+
+.notification.alert {
+    border-left-color: #e74c3c;
+}
+
+/* ─── MODAL NOMBRE ────────────────────────────────────────── */
+#name-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+}
+
+#name-box {
+    background: #1a1a2e;
+    border: 2px solid #7c6af7;
+    border-radius: 16px;
+    padding: 48px 60px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    min-width: 340px;
+}
+
+#name-icon {
+    font-size: 3rem;
+}
+
+#name-box h2 {
+    font-size: 1.4rem;
+}
+
+#name-box p {
+    color: #aaa;
     font-size: 0.9rem;
-    box-shadow: 0 0 20px rgba(0,0,0,0.6);
 }
 
-/* BOTÓN LEVANTAR MANO */
-#controls {
-    position: absolute;
-    bottom: 80px;
-    right: 20px;
+#name-input {
+    width: 100%;
+    padding: 10px 16px;
+    background: #2a2a4a;
+    border: 1px solid #3a3a6a;
+    border-radius: 8px;
+    color: white;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
 }
 
-#raise-hand-btn {
-    padding: 12px 18px;
+#name-input:focus {
+    border-color: #7c6af7;
+}
+
+#name-box button {
+    width: 100%;
+    padding: 10px;
+    background: #7c6af7;
+    color: white;
     border: none;
-    border-radius: 25px;
-    background: #38bdf8;
-    color: #0f172a;
-    font-weight: bold;
+    border-radius: 8px;
+    font-size: 1rem;
     cursor: pointer;
-    transition: 0.2s;
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.6);
+    transition: background 0.2s;
 }
 
-#raise-hand-btn:hover {
-    background: #0ea5e9;
+#name-box button:hover {
+    background: #6a5ae0;
 }
 
-/* UTILIDADES */
-.hidden {
-    display: none;
+/* ─── ANIMACIONES ─────────────────────────────────────────── */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateX(10px); }
+    to   { opacity: 1; transform: translateX(0); }
 }

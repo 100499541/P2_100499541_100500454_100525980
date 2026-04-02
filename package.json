@@ -21,6 +21,7 @@
   "homepage": "https://github.com/100499541/P2_100499541_100500454_100525980#readme",
   "dependencies": {
     "express": "^5.2.1",
+    "selfsigned": "^5.5.0",
     "socket.io": "^4.8.3"
   }
 }

@@ -7,6 +7,8 @@ let isPresenting = false;
 let voiceActive = false;
 let gestureActive = false;
 let zoomActive = false;
+let prevIndexX = null;
+let swipeCooldown = false;
 
 // MediaPipe
 let hands = null;
@@ -49,7 +51,6 @@ function loadSlides() {
     slides = [
         '/slides/slide1.jpg',
         '/slides/slide2.jpg',
-        '/slides/slide3.jpg',
     ];
 
     emitSetTotalSlides(slides.length);
@@ -205,48 +206,78 @@ function detectGesture(lm) {
     const pinkyUp  = lm[20].y < lm[18].y;
 
     // MANO ABIERTA → pausa/reanuda
-    if (thumbUp && indexUp && middleUp && ringUp && pinkyUp) return 'open_hand';
+    if (thumbUp && indexUp && middleUp && ringUp && pinkyUp) {
+        prevIndexX = null;
+        return 'open_hand';
+    }
 
-    // PUÑO → salir/finalizar
-    if (!indexUp && !middleUp && !ringUp && !pinkyUp) return 'fist';
+    // PUÑO → finalizar
+    if (!indexUp && !middleUp && !ringUp && !pinkyUp) {
+        prevIndexX = null;
+        return 'fist';
+    }
 
-    // ÍNDICE SOLO → swipe o puntero
+    // PULGAR SOLO → zoom
+    if (thumbUp && !indexUp && !middleUp && !ringUp && !pinkyUp) {
+        prevIndexX = null;
+        return 'thumb_up';
+    }
+
+    // DOS DEDOS → puntero
+    if (indexUp && middleUp && !ringUp && !pinkyUp) {
+        prevIndexX = null;
+        return 'two_fingers';
+    }
+
+    // SWIPE: índice solo, rastrear movimiento entre frames
     if (indexUp && !middleUp && !ringUp && !pinkyUp) {
-        const dx = lm[8].x - lm[5].x;
-        if (dx > 0.1)  return 'swipe_right';
-        if (dx < -0.1) return 'swipe_left';
+        const currentX = lm[8].x;
+
+        if (prevIndexX !== null && !swipeCooldown) {
+            const delta = currentX - prevIndexX;
+
+            if (delta > 0.08) {
+                prevIndexX = currentX;
+                swipeCooldown = true;
+                setTimeout(() => { swipeCooldown = false; }, GESTURE_COOLDOWN);
+                return 'swipe_right'; // mano va a la derecha → diapositiva anterior (espejo)
+            }
+            if (delta < -0.08) {
+                prevIndexX = currentX;
+                swipeCooldown = true;
+                setTimeout(() => { swipeCooldown = false; }, GESTURE_COOLDOWN);
+                return 'swipe_left'; // mano va a la izquierda → siguiente
+            }
+        }
+
+        prevIndexX = currentX;
         return 'pointing';
     }
 
-    // DOS DEDOS → puntero visible
-    if (indexUp && middleUp && !ringUp && !pinkyUp) return 'two_fingers';
-
-    // PULGAR SOLO → zoom
-    if (thumbUp && !indexUp && !middleUp && !ringUp && !pinkyUp) return 'thumb_up';
-
+    prevIndexX = null;
     return null;
 }
 
 function executeGesture(gesture, landmarks) {
     switch (gesture) {
         case 'swipe_right':
-            nextSlide();
-            addNotification('👉 Siguiente diapositiva', false);
+            prevSlide();  // espejo: mano derecha = retroceder
+            addNotification('👈 Diapositiva anterior', false);
             addLog('Gesto: swipe derecha');
             break;
 
         case 'swipe_left':
-            prevSlide();
-            addNotification('👈 Diapositiva anterior', false);
+            nextSlide();  // espejo: mano izquierda = avanzar
+            addNotification('👉 Siguiente diapositiva', false);
             addLog('Gesto: swipe izquierda');
             break;
 
-        case 'open_hand':
-            togglePresentation();
-            addLog('Gesto: mano abierta (pausa/inicio)');
-            break;
+        // case 'open_hand':
+         //   togglePresentation();
+          //  addLog('Gesto: mano abierta (pausa/inicio)');
+          //  break;
 
-        case 'fist':
+     //   case 'fist':
             if (isPresenting) confirmFinish();
             addLog('Gesto: puño (fin)');
             break;
@@ -470,7 +501,8 @@ function startVoiceRecognition() {
     recognition.interimResults = true;
 
     recognition.onstart = () => {
-        document.getElementById('voice-overlay').style.display = 'flex';
+        // Solo actualizar el log, sin overlay
+        addLog('Reconocimiento de voz activo');
     };
 
     recognition.onresult = (event) => {
@@ -481,12 +513,11 @@ function startVoiceRecognition() {
             .toLowerCase()
             .trim();
 
-        document.getElementById('voice-result').textContent = transcript;
+        // Mostrar en el log en vez del overlay
+        addLog(`🎙 "${transcript}"`);
 
-        // Subtítulos: emitir siempre el texto reconocido
         updateSubtitle(transcript);
 
-        // Solo procesar comandos en resultados finales
         const isFinal = results[results.length - 1].isFinal;
         if (isFinal) {
             processVoiceCommand(transcript);
@@ -494,13 +525,11 @@ function startVoiceRecognition() {
     };
 
     recognition.onend = () => {
-        document.getElementById('voice-overlay').style.display = 'none';
         if (voiceActive) recognition.start();
     };
 
     recognition.onerror = (e) => {
         addLog('Error voz: ' + e.error);
-        document.getElementById('voice-overlay').style.display = 'none';
     };
 
     recognition.start();
@@ -511,7 +540,6 @@ function stopVoiceRecognition() {
         recognition.stop();
         recognition = null;
     }
-    document.getElementById('voice-overlay').style.display = 'none';
 }
 
 function processVoiceCommand(transcript) {

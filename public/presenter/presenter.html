@@ -5,18 +5,107 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GestureSlides - Presentador</title>
     <link rel="stylesheet" href="presenter.css">
+    <style>
+        /* ─── CANVAS DE DIBUJO ─── */
+        #draw-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        /* ─── BARRA DE SUBTÍTULOS ─── */
+        #subtitle-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            text-align: center;
+            padding: 10px 20px;
+            font-size: 1.1rem;
+            z-index: 20;
+            border-radius: 0 0 8px 8px;
+            min-height: 44px;
+        }
+
+        /* ─── RESULTADOS ENCUESTA ─── */
+        .poll-result-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 0.78rem;
+        }
+
+        .poll-option-label {
+            width: 60px;
+            color: #ccc;
+            flex-shrink: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .poll-bar-wrap {
+            flex: 1;
+            background: #2a2a4a;
+            border-radius: 4px;
+            height: 10px;
+            overflow: hidden;
+        }
+
+        .poll-bar {
+            height: 100%;
+            background: #7c6af7;
+            border-radius: 4px;
+            transition: width 0.4s ease;
+        }
+
+        .poll-count {
+            width: 60px;
+            color: #aaa;
+            font-size: 0.72rem;
+            flex-shrink: 0;
+            text-align: right;
+        }
+
+        .poll-total {
+            font-size: 0.72rem;
+            color: #7c6af7;
+            text-align: right;
+            margin-top: 4px;
+        }
+
+        /* ─── BOTÓN DIBUJO Y SUBTÍTULOS ─── */
+        #btn-draw.active {
+            background: #ff4757;
+            border-color: #ff4757;
+        }
+
+        #btn-subtitles.active {
+            background: #f39c12;
+            border-color: #f39c12;
+        }
+    </style>
 </head>
 <body>
 
-    <!-- PANEL PRINCIPAL -->
     <div id="app">
 
         <!-- BARRA SUPERIOR -->
         <header id="topbar">
             <span id="title">🎤 GestureSlides</span>
             <div id="controls">
-                <button id="btn-start" onclick="togglePresentation()">▶ Iniciar</button>
-                <button id="btn-voice" onclick="toggleVoice()">🎙 Voz</button>
+                <button id="btn-start"      onclick="togglePresentation()">▶ Iniciar</button>
+                <button id="btn-voice"      onclick="toggleVoice()">🎙 Voz</button>
+                <button id="btn-draw"       onclick="toggleDrawingMode()">✏️ Dibujar</button>
+                <button id="btn-subtitles"  onclick="toggleSubtitles()">📝 Subtítulos</button>
+                <button onclick="clearDrawingCanvas()">🗑️ Borrar</button>
                 <button id="btn-fullscreen" onclick="toggleFullscreen()">⛶ Pantalla completa</button>
             </div>
             <div id="status">
@@ -30,11 +119,15 @@
         <main id="slide-area">
             <div id="slide-container">
                 <img id="slide-img" src="" alt="Diapositiva" draggable="false"/>
+                <canvas id="draw-canvas"></canvas>
                 <div id="pointer-dot" style="display:none"></div>
                 <div id="zoom-overlay" style="display:none"></div>
+                <div id="subtitle-bar" style="display:none">
+                    <span id="subtitle-text"></span>
+                </div>
             </div>
 
-            <!-- FEED DE CÁMARA (esquina inferior izquierda) -->
+            <!-- FEED DE CÁMARA -->
             <video id="camera-feed" autoplay muted playsinline></video>
             <canvas id="gesture-canvas"></canvas>
         </main>
@@ -46,6 +139,9 @@
 
             <h3 style="margin-top:20px">Manos levantadas</h3>
             <div id="hands-list"></div>
+
+            <h3 style="margin-top:20px">Encuesta</h3>
+            <div id="poll-results"></div>
 
             <h3 style="margin-top:20px">Log de comandos</h3>
             <div id="command-log"></div>
@@ -63,9 +159,11 @@
     </div>
 
     <!-- SCRIPTS -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/socket-client.js"></script>
     <script src="presenter.js"></script>
-
 </body>
 </html>

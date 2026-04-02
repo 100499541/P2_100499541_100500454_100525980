@@ -95,7 +95,10 @@ io.on('connection', (socket) => {
 
     socket.on('set-total-slides', (data) => {
         presentationState.totalSlides = data.total;
+        presentationState.slides = data.slides || [];
         io.emit('total-slides-set', { total: data.total });
+        // Reenviar estado completo para espectadores que se conecten tarde
+        io.emit('presentation-state', presentationState);
     });
 
     // ─── DIBUJO ───────────────────────────────────────────────
