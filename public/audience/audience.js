@@ -5,6 +5,8 @@ let userName = '';
 let handRaised = false;
 let gestureDetectionActive = false;
 let hasVoted = false;
+let slides = [];
+let participants = [];
 
 // MediaPipe
 let hands = null;
@@ -39,6 +41,7 @@ function confirmName() {
     }
     userName = input;
     document.getElementById('name-modal').style.display = 'none';
+    emitRegisterParticipant('audience', userName);
 
     // Arrancar todo una vez tenemos nombre
     initSocketListeners();
@@ -119,12 +122,6 @@ function processAudienceGesture(landmarks) {
                 raiseHand();
             }
         }
-
-        if (gesture === 'fist') {
-            if (handRaised) {
-                lowerHand();
-            }
-        }
     }
 }
 
@@ -137,9 +134,6 @@ function detectAudienceGesture(lm) {
 
     // MANO ABIERTA (todos los dedos arriba) → levantar mano
     if (thumbUp && indexUp && middleUp && ringUp && pinkyUp) return 'hand_up';
-
-    // PUÑO (ningún dedo arriba) → bajar mano
-    if (!indexUp && !middleUp && !ringUp && !pinkyUp) return 'fist';
 
     return null;
 }
@@ -156,29 +150,32 @@ function toggleHandRaise() {
 }
 
 function raiseHand() {
-    handRaised = true;
-    emitRaiseHand(userName);
-
-    const btn = document.getElementById('btn-hand');
-    const status = document.getElementById('status-hand');
-    btn.textContent = '✋ Bajar mano';
-    btn.classList.add('active');
-    status.textContent = '✋ Mano: ON';
-    status.classList.add('active');
-
+    setHandRaised(true, true);
     addNotification('✋ Mano levantada — el presentador ha sido notificado', false);
 }
 
 function lowerHand() {
-    handRaised = false;
-    emitLowerHand();
+    setHandRaised(false, true);
+}
 
+function setHandRaised(active, shouldEmit) {
+    handRaised = active;
     const btn = document.getElementById('btn-hand');
     const status = document.getElementById('status-hand');
-    btn.textContent = '✋ Levantar mano';
-    btn.classList.remove('active');
-    status.textContent = '✋ Mano: OFF';
-    status.classList.remove('active');
+
+    if (active) {
+        if (shouldEmit) emitRaiseHand(userName);
+        btn.textContent = '✋ Bajar mano';
+        btn.classList.add('active');
+        status.textContent = '✋ Mano: ON';
+        status.classList.add('active');
+    } else {
+        if (shouldEmit) emitLowerHand();
+        btn.textContent = '✋ Levantar mano';
+        btn.classList.remove('active');
+        status.textContent = '✋ Mano: OFF';
+        status.classList.remove('active');
+    }
 }
 
 // =============================================
@@ -310,19 +307,25 @@ function closePoll(results) {
 // SOCKET LISTENERS
 // =============================================
 function initSocketListeners() {
-
+    emitRequestPresentationState();
+  
     // ─── DIAPOSITIVAS ─────────────────────────────────────────
     socket.on('presentation-state', (data) => {
+        slides = data.slides || [];
         // Cargar diapositiva actual al conectarse
-        if (data.totalSlides > 0) {
+        if (slides.length > 0 && data.currentSlide < slides.length) {
             const img = document.getElementById('slide-img');
-            img.src = `/slides/slide${data.currentSlide + 1}.jpg`;
+            img.src = slides[data.currentSlide].url;
         }
         updateSlideCounter(data.currentSlide, data.totalSlides);
         updatePresentingStatus(data.isPresenting);
+        participants = data.participants || [];
+        renderParticipants(participants);
 
         if (data.zoomActive) {
-            document.getElementById('zoom-overlay').style.display = 'block';
+            applyZoomState(true, data.zoomTarget, data.zoomScale);
+        } else {
+            applyZoomState(false, data.zoomTarget, 1);
         }
         if (data.currentPoll) {
             renderPoll(data.currentPoll, data.pollResults);
@@ -331,7 +334,9 @@ function initSocketListeners() {
 
     socket.on('slide-changed', (data) => {
         const img = document.getElementById('slide-img');
-        img.src = `/slides/slide${data.slide + 1}.jpg`;
+        if (slides.length > data.slide) {
+            img.src = slides[data.slide].url;
+        }
         updateSlideCounter(data.slide, null);
         clearDrawingCanvas();
     });
@@ -342,6 +347,11 @@ function initSocketListeners() {
 
     socket.on('presentation-toggled', (data) => {
         updatePresentingStatus(data.isPresenting);
+    });
+
+    socket.on('participants-updated', (data) => {
+        participants = data || [];
+        renderParticipants(participants);
     });
 
     // ─── PUNTERO ──────────────────────────────────────────────
@@ -360,12 +370,12 @@ function initSocketListeners() {
     });
 
     // ─── ZOOM ─────────────────────────────────────────────────
-    socket.on('zoom-activated', () => {
-        document.getElementById('zoom-overlay').style.display = 'block';
+    socket.on('zoom-activated', (data) => {
+        applyZoomState(true, data.target, data.scale);
     });
 
     socket.on('zoom-deactivated', () => {
-        document.getElementById('zoom-overlay').style.display = 'none';
+        applyZoomState(false, { x: 0.5, y: 0.5 }, 1);
     });
 
     // ─── DIBUJO ───────────────────────────────────────────────
@@ -412,23 +422,43 @@ function initSocketListeners() {
     // ─── MANOS ────────────────────────────────────────────────
     socket.on('hand-lowered', (data) => {
         if (data.userId === socket.id && handRaised) {
-            lowerHand();
-            // Notificación más visible
-            addNotification('🎤 ¡El presentador te ha dado el turno de palabra!', false);
-            // Alerta sonora
-            const audio = new AudioContext();
-            const osc = audio.createOscillator();
-            const gain = audio.createGain();
-            osc.connect(gain);
-            gain.connect(audio.destination);
-            osc.frequency.value = 880;
-            gain.gain.setValueAtTime(0.3, audio.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.5);
-            osc.start();
-            osc.stop(audio.currentTime + 0.5);
+            setHandRaised(false, false);
         }
     });
-    }
+
+    socket.on('turn-granted', () => {
+        setHandRaised(false, false);
+        addNotification('🎤 ¡El presentador te ha dado el turno de palabra!', false);
+        playTurnGrantedSound();
+    });
+}
+
+function applyZoomState(active, target = { x: 0.5, y: 0.5 }, scale = 1) {
+    const overlay = document.getElementById('zoom-overlay');
+    overlay.style.display = active ? 'block' : 'none';
+
+    const appliedScale = active ? scale : 1;
+    const origin = `${target.x * 100}% ${target.y * 100}%`;
+
+    ['slide-img', 'draw-canvas'].forEach((id) => {
+        const element = document.getElementById(id);
+        element.style.transformOrigin = origin;
+        element.style.transform = `scale(${appliedScale})`;
+    });
+}
+
+function playTurnGrantedSound() {
+    const audio = new AudioContext();
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+    osc.connect(gain);
+    gain.connect(audio.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.3, audio.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.5);
+    osc.start();
+    osc.stop(audio.currentTime + 0.5);
+}
 
 // =============================================
 // UI HELPERS
@@ -477,4 +507,33 @@ function toggleFullscreen() {
     } else {
         document.exitFullscreen();
     }
+}
+
+function renderParticipants(list) {
+    const container = document.getElementById('participants-list');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    list.forEach((participant) => {
+        const item = document.createElement('div');
+        item.className = 'participant-item' + (participant.hasTurn ? ' turn-active' : '');
+
+        const icon = participant.role === 'presenter' ? '🎤' : '👤';
+        const roleLabel = participant.role === 'presenter' ? 'Presentador' : 'Espectador';
+        const hand = participant.handRaised ? '<span class="participant-hand">✋</span>' : '';
+
+        item.innerHTML = `
+            <div class="participant-main">
+                <span>${icon}</span>
+                <span class="participant-name">${participant.name}</span>
+            </div>
+            <div class="participant-main">
+                <span class="participant-role">${roleLabel}</span>
+                ${hand}
+            </div>
+        `;
+
+        container.appendChild(item);
+    });
 }

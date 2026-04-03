@@ -7,7 +7,10 @@ let isPresenting = false;
 let voiceActive = false;
 let gestureActive = false;
 let zoomActive = false;
+let zoomScale = 1;
+let zoomTarget = { x: 0.5, y: 0.5 };
 let prevIndexX = null;
+let prevIndexY = null;
 let swipeCooldown = false;
 
 // MediaPipe
@@ -18,6 +21,13 @@ let camera = null;
 let lastGesture = '';
 let gestureTimeout = null;
 const GESTURE_COOLDOWN = 1000;
+const PINCH_CLOSE_DISTANCE = 0.08;
+const PINCH_OPEN_DISTANCE = 0.1;
+const PINCH_MID_DISTANCE = 0.065;
+const ZOOM_STEP = 0.45;
+const MAX_ZOOM_SCALE = 3.25;
+let prevPinchDistance = null;
+let participants = [];
 
 // ─── DIBUJO ───────────────────────────────────────────────────
 let drawingMode = false;
@@ -37,8 +47,9 @@ let pendingPollQuestion = null; // guardamos la pregunta mientras esperamos opci
 // =============================================
 // INICIALIZACIÓN
 // =============================================
-window.addEventListener('load', () => {
-    loadSlides();
+window.addEventListener('load', async () => {
+    await loadSlides();
+    emitRegisterParticipant('presenter', 'Presentador');
     initCamera();
     initSocketListeners();
     initDrawingCanvas();
@@ -47,13 +58,17 @@ window.addEventListener('load', () => {
 // =============================================
 // DIAPOSITIVAS
 // =============================================
-function loadSlides() {
-    slides = [
-        '/slides/slide1.jpg',
-        '/slides/slide2.jpg',
-    ];
+async function loadSlides() {
+    try {
+        const response = await fetch('/api/slides');
+        const data = await response.json();
+        slides = data.slides || [];
+    } catch (error) {
+        addLog('Error cargando diapositivas: ' + error.message);
+        slides = [];
+    }
 
-    emitSetTotalSlides(slides.length);
+    emitSetTotalSlides(slides.length, slides);
     updateSlideCounter();
 
     if (slides.length > 0) {
@@ -66,7 +81,7 @@ function loadSlides() {
 function showSlide(index) {
     if (index < 0 || index >= slides.length) return;
     currentSlide = index;
-    document.getElementById('slide-img').src = slides[index];
+    document.getElementById('slide-img').src = slides[index].url;
     updateSlideCounter();
     emitChangeSlide(index);
     addLog(`Diapositiva ${index + 1}`);
@@ -158,6 +173,7 @@ function initCamera() {
                 isDrawing = false;
                 lastDrawPoint = null;
             }
+            hidePointer();
         }
     });
 
@@ -204,99 +220,112 @@ function detectGesture(lm) {
     const middleUp = lm[12].y < lm[10].y;
     const ringUp   = lm[16].y < lm[14].y;
     const pinkyUp  = lm[20].y < lm[18].y;
+    const pinchDistance = distanceBetween(lm[4], lm[8]);
+    const pinchGestureCandidate =
+        lm[4].x < lm[8].x + 0.22 &&
+        Math.abs(lm[4].y - lm[8].y) < 0.28;
 
-    // MANO ABIERTA → pausa/reanuda
-    if (thumbUp && indexUp && middleUp && ringUp && pinkyUp) {
-        prevIndexX = null;
-        return 'open_hand';
+    if (pinchGestureCandidate && prevPinchDistance !== null && !swipeCooldown) {
+        if (prevPinchDistance < PINCH_CLOSE_DISTANCE && pinchDistance > PINCH_OPEN_DISTANCE) {
+            prevPinchDistance = pinchDistance;
+            prevIndexX = null;
+            prevIndexY = null;
+            swipeCooldown = true;
+            setTimeout(() => { swipeCooldown = false; }, GESTURE_COOLDOWN);
+            return 'pinch_out';
+        }
+
     }
 
-    // PUÑO → finalizar
+    if (pinchGestureCandidate) {
+        prevPinchDistance = pinchDistance;
+    } else {
+        prevPinchDistance = null;
+    }
+
     if (!indexUp && !middleUp && !ringUp && !pinkyUp) {
         prevIndexX = null;
+        prevIndexY = null;
         return 'fist';
     }
 
-    // PULGAR SOLO → zoom
-    if (thumbUp && !indexUp && !middleUp && !ringUp && !pinkyUp) {
-        prevIndexX = null;
-        return 'thumb_up';
-    }
-
-    // DOS DEDOS → puntero
     if (indexUp && middleUp && !ringUp && !pinkyUp) {
         prevIndexX = null;
+        prevIndexY = null;
         return 'two_fingers';
     }
 
-    // SWIPE: índice solo, rastrear movimiento entre frames
     if (indexUp && !middleUp && !ringUp && !pinkyUp) {
         const currentX = lm[8].x;
 
         if (prevIndexX !== null && !swipeCooldown) {
             const delta = currentX - prevIndexX;
+            const deltaY = lm[8].y - prevIndexY;
 
-            if (delta > 0.08) {
+            if (delta > 0.05 && Math.abs(deltaY) < 0.08) {
                 prevIndexX = currentX;
+                prevIndexY = lm[8].y;
                 swipeCooldown = true;
                 setTimeout(() => { swipeCooldown = false; }, GESTURE_COOLDOWN);
-                return 'swipe_right'; // mano va a la derecha → diapositiva anterior (espejo)
+                return 'swipe_right';
             }
-            if (delta < -0.08) {
+            if (delta < -0.05 && Math.abs(deltaY) < 0.08) {
                 prevIndexX = currentX;
+                prevIndexY = lm[8].y;
                 swipeCooldown = true;
                 setTimeout(() => { swipeCooldown = false; }, GESTURE_COOLDOWN);
-                return 'swipe_left'; // mano va a la izquierda → siguiente
+                return 'swipe_left';
             }
         }
 
         prevIndexX = currentX;
+        prevIndexY = lm[8].y;
         return 'pointing';
     }
 
     prevIndexX = null;
+    prevIndexY = null;
     return null;
 }
 
 function executeGesture(gesture, landmarks) {
     switch (gesture) {
         case 'swipe_right':
-            prevSlide();  // espejo: mano derecha = retroceder
-            addNotification('👈 Diapositiva anterior', false);
+            prevSlide();
+            addNotification('Diapositiva anterior', false);
             addLog('Gesto: swipe derecha');
             break;
 
         case 'swipe_left':
-            nextSlide();  // espejo: mano izquierda = avanzar
-            addNotification('👉 Siguiente diapositiva', false);
+            nextSlide();
+            addNotification('Siguiente diapositiva', false);
             addLog('Gesto: swipe izquierda');
             break;
 
-        // case 'open_hand':
-         //   togglePresentation();
-          //  addLog('Gesto: mano abierta (pausa/inicio)');
-          //  break;
-
-     //   case 'fist':
-            if (isPresenting) confirmFinish();
-            addLog('Gesto: puño (fin)');
+        case 'pinch_out':
+            increaseZoom(1 - landmarks[8].x, landmarks[8].y);
+            addNotification(`Zoom + (${zoomScale.toFixed(2)}x)`, false);
+            addLog('Gesto: pellizco hacia fuera (zoom +)');
             break;
 
-        case 'thumb_up':
-            if (!zoomActive) {
-                activateZoom(landmarks[4].x, landmarks[4].y);
-                addNotification('🔍 Zoom activado', false);
-                addLog('Gesto: pulgar arriba (zoom ON)');
-            } else {
+
+        case 'fist':
+            if (zoomActive) {
                 deactivateZoom();
-                addLog('Gesto: pulgar arriba (zoom OFF)');
+                addNotification('Zoom desactivado', false);
+                addLog('Gesto: cerrar puno (zoom OFF)');
             }
             break;
 
         case 'two_fingers':
-            addLog('Gesto: dos dedos (puntero)');
             break;
     }
+}
+
+function distanceBetween(a, b) {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
 }
 
 // =============================================
@@ -320,19 +349,75 @@ function updatePointer(landmarks) {
     emitPointerMove(x, y);
 }
 
+function updateDrawingCursor(landmarks) {
+    const slideContainer = document.getElementById('slide-container');
+    const rect = slideContainer.getBoundingClientRect();
+    const dot = document.getElementById('pointer-dot');
+
+    const x = (1 - landmarks[8].x) * rect.width;
+    const y = landmarks[8].y * rect.height;
+
+    dot.classList.add('drawing-cursor');
+    dot.textContent = '✏️';
+    dot.style.display = 'block';
+    dot.style.left = x + 'px';
+    dot.style.top = y + 'px';
+}
+
+function hidePointer() {
+    const dot = document.getElementById('pointer-dot');
+    dot.style.display = 'none';
+    dot.textContent = '';
+    dot.classList.remove('drawing-cursor');
+    emitPointerHide();
+}
+
 // =============================================
 // ZOOM
 // =============================================
+function increaseZoom(x, y) {
+    zoomTarget = { x, y };
+    zoomScale = Math.min(MAX_ZOOM_SCALE, zoomScale + ZOOM_STEP);
+    zoomActive = zoomScale > 1;
+    renderZoomState();
+}
+
+function decreaseZoom() {
+    zoomScale = Math.max(1, zoomScale - ZOOM_STEP);
+    zoomActive = zoomScale > 1;
+    renderZoomState();
+}
+
 function activateZoom(x, y) {
-    zoomActive = true;
-    document.getElementById('zoom-overlay').style.display = 'block';
-    emitZoomActivate(x, y);
+    increaseZoom(x, y);
 }
 
 function deactivateZoom() {
+    zoomScale = 1;
     zoomActive = false;
-    document.getElementById('zoom-overlay').style.display = 'none';
-    emitZoomDeactivate();
+    renderZoomState();
+}
+
+function renderZoomState() {
+    document.getElementById('zoom-overlay').style.display = zoomActive ? 'block' : 'none';
+    applyZoomVisual(zoomActive, zoomTarget, zoomScale);
+
+    if (zoomActive) {
+        emitZoomActivate(zoomTarget.x, zoomTarget.y, zoomScale);
+    } else {
+        emitZoomDeactivate();
+    }
+}
+
+function applyZoomVisual(active, target, scale = 1) {
+    const appliedScale = active ? scale : 1;
+    const origin = `${target.x * 100}% ${target.y * 100}%`;
+
+    ['slide-img', 'draw-canvas'].forEach((id) => {
+        const element = document.getElementById(id);
+        element.style.transformOrigin = origin;
+        element.style.transform = `scale(${appliedScale})`;
+    });
 }
 
 // =============================================
@@ -361,14 +446,14 @@ function toggleDrawingMode() {
         btn.classList.add('active');
         addNotification('✏️ Modo dibujo ON', false);
         addLog('Dibujo activado');
-        // Ocultar puntero mientras dibujamos
-        document.getElementById('pointer-dot').style.display = 'none';
+        document.getElementById('pointer-dot').classList.add('drawing-cursor');
     } else {
         isDrawing = false;
         lastDrawPoint = null;
         btn.classList.remove('active');
         addNotification('✏️ Modo dibujo OFF', false);
         addLog('Dibujo desactivado');
+        hidePointer();
     }
 }
 
@@ -388,6 +473,7 @@ function handleDrawingGesture(landmarks) {
 
     const x = (1 - landmarks[8].x) * canvas.width;
     const y = landmarks[8].y * canvas.height;
+    updateDrawingCursor(landmarks);
 
     // Normalizado para enviar por socket (0-1)
     const nx = x / canvas.width;
@@ -487,6 +573,7 @@ function toggleVoice() {
 }
 
 let recognition = null;
+let lastVoiceSnippet = '';
 
 function startVoiceRecognition() {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -506,20 +593,23 @@ function startVoiceRecognition() {
     };
 
     recognition.onresult = (event) => {
-        const results = Array.from(event.results);
-        const transcript = results
-            .map(r => r[0].transcript)
-            .join('')
-            .toLowerCase()
-            .trim();
+        const result = event.results[event.resultIndex];
+        if (!result || !result[0]) return;
 
-        // Mostrar en el log en vez del overlay
-        addLog(`🎙 "${transcript}"`);
+        const transcript = result[0].transcript.toLowerCase().trim();
+        if (!transcript) return;
+
+        const isFinal = result.isFinal;
+
+        if (isFinal || transcript !== lastVoiceSnippet) {
+            addLog('Voz captada: "' + transcript + '"');
+            lastVoiceSnippet = transcript;
+        }
 
         updateSubtitle(transcript);
 
-        const isFinal = results[results.length - 1].isFinal;
         if (isFinal) {
+            lastVoiceSnippet = '';
             processVoiceCommand(transcript);
         }
     };
@@ -543,13 +633,12 @@ function stopVoiceRecognition() {
 }
 
 function processVoiceCommand(transcript) {
-    // ─── NAVEGACIÓN ───────────────────────────────────────────
     if (transcript.includes('siguiente') || transcript.includes('avanzar')) {
         nextSlide();
         addLog('Voz: siguiente');
         return;
     }
-    if (transcript.includes('anterior') || transcript.includes('retroceder') || transcript.includes('atrás')) {
+    if (transcript.includes('anterior') || transcript.includes('retroceder') || transcript.includes('atras')) {
         prevSlide();
         addLog('Voz: anterior');
         return;
@@ -557,11 +646,10 @@ function processVoiceCommand(transcript) {
     const matchSlide = transcript.match(/diapositiva\s+(\d+)/);
     if (matchSlide) {
         goToSlide(parseInt(matchSlide[1]));
-        addLog(`Voz: ir a diapositiva ${matchSlide[1]}`);
+        addLog('Voz: ir a diapositiva ' + matchSlide[1]);
         return;
     }
 
-    // ─── CONTROL PRINCIPAL ────────────────────────────────────
     if (transcript.includes('iniciar') || transcript.includes('empezar') || transcript.includes('comenzar')) {
         if (!isPresenting) togglePresentation();
         addLog('Voz: iniciar');
@@ -573,62 +661,18 @@ function processVoiceCommand(transcript) {
         return;
     }
 
-    // ─── SALIDA ───────────────────────────────────────────────
-    if (transcript.includes('finalizar') || transcript.includes('terminar') || transcript.includes('cerrar')) {
-        confirmFinish();
-        addLog('Voz: finalizar');
+    if (transcript === 'lanzar encuesta') {
+        pendingPollQuestion = 'Encuesta rapida';
+        addNotification('Pregunta guardada: "Encuesta rapida". Di "opciones Si No" o "opciones A B C"', false);
+        addLog('Voz: pregunta encuesta = "Encuesta rapida"');
         return;
     }
 
-    // ─── ZOOM ─────────────────────────────────────────────────
-    if (transcript.includes('zoom') || transcript.includes('ampliar')) {
-        if (!zoomActive) activateZoom(0.5, 0.5);
-        addLog('Voz: zoom activado');
-        return;
-    }
-    if (transcript.includes('quitar zoom') || transcript.includes('reducir')) {
-        deactivateZoom();
-        addLog('Voz: zoom desactivado');
-        return;
-    }
-
-    // ─── DIBUJO ───────────────────────────────────────────────
-    if (transcript.includes('dibujar') || transcript.includes('modo dibujo') || transcript.includes('activar dibujo')) {
-        if (!drawingMode) toggleDrawingMode();
-        addLog('Voz: dibujo activado');
-        return;
-    }
-    if (transcript.includes('dejar de dibujar') || transcript.includes('salir dibujo') || transcript.includes('desactivar dibujo')) {
-        if (drawingMode) toggleDrawingMode();
-        addLog('Voz: dibujo desactivado');
-        return;
-    }
-    if (transcript.includes('borrar') || transcript.includes('limpiar')) {
-        clearDrawingCanvas();
-        addNotification('🗑️ Pizarra limpiada', false);
-        addLog('Voz: borrar dibujo');
-        return;
-    }
-
-    // ─── SUBTÍTULOS ───────────────────────────────────────────
-    if (transcript.includes('activar subtítulos') || transcript.includes('subtítulos on')) {
-        if (!subtitlesActive) toggleSubtitles();
-        addLog('Voz: subtítulos ON');
-        return;
-    }
-    if (transcript.includes('desactivar subtítulos') || transcript.includes('subtítulos off')) {
-        if (subtitlesActive) toggleSubtitles();
-        addLog('Voz: subtítulos OFF');
-        return;
-    }
-
-    // ─── ENCUESTA ─────────────────────────────────────────────
-    // Flujo: "lanzar encuesta [pregunta]" → luego "opciones [A] [B] [C]"
     const matchPoll = transcript.match(/lanzar encuesta\s+(.+)/);
     if (matchPoll) {
         pendingPollQuestion = matchPoll[1].trim();
-        addNotification(`📊 Pregunta guardada: "${pendingPollQuestion}". Di "opciones Sí No" o "opciones A B C"`, false);
-        addLog(`Voz: pregunta encuesta = "${pendingPollQuestion}"`);
+        addNotification('Pregunta guardada: "' + pendingPollQuestion + '". Di "opciones Si No" o "opciones A B C"', false);
+        addLog('Voz: pregunta encuesta = "' + pendingPollQuestion + '"');
         return;
     }
 
@@ -638,16 +682,82 @@ function processVoiceCommand(transcript) {
         emitPollStart(pendingPollQuestion, options);
         pollActive = true;
         pendingPollQuestion = null;
-        addNotification(`📊 Encuesta lanzada`, false);
-        addLog(`Voz: encuesta iniciada`);
+        addNotification('Encuesta lanzada', false);
+        addLog('Voz: encuesta iniciada');
         return;
     }
 
     if (transcript.includes('cerrar encuesta') || transcript.includes('finalizar encuesta')) {
         emitPollEnd();
         pollActive = false;
-        addNotification('📊 Encuesta cerrada', false);
+        addNotification('Encuesta cerrada', false);
         addLog('Voz: encuesta cerrada');
+        return;
+    }
+
+    if (
+        transcript.includes('finalizar presentacion') ||
+        transcript.includes('terminar presentacion') ||
+        transcript.includes('cerrar presentacion')
+    ) {
+        confirmFinish();
+        addLog('Voz: finalizar presentacion');
+        return;
+    }
+
+    if (transcript.includes('quitar zoom') || transcript.includes('quitar zum') || transcript.includes('reducir')) {
+        deactivateZoom();
+        addLog('Voz: zoom desactivado');
+        return;
+    }
+    if (transcript.includes('zoom') || transcript.includes('zum') || transcript.includes('ampliar')) {
+        increaseZoom(0.5, 0.5);
+        addLog('Voz: zoom activado (' + zoomScale.toFixed(2) + 'x)');
+        return;
+    }
+
+    if (
+        transcript.includes('dejar de dibujar') ||
+        transcript.includes('salir dibujo') ||
+        transcript.includes('desactivar dibujo') ||
+        transcript.includes('desactivar dibujar')
+    ) {
+        if (drawingMode) toggleDrawingMode();
+        addLog('Voz: dibujo desactivado');
+        return;
+    }
+    if (transcript.includes('dibujar') || transcript.includes('modo dibujo') || transcript.includes('activar dibujo')) {
+        if (!drawingMode) toggleDrawingMode();
+        addLog('Voz: dibujo activado');
+        return;
+    }
+    if (transcript.includes('borrar') || transcript.includes('limpiar')) {
+        clearDrawingCanvas();
+        addNotification('Pizarra limpiada', false);
+        addLog('Voz: borrar dibujo');
+        return;
+    }
+
+    if (
+        transcript.includes('desactivar subtitulos') ||
+        transcript.includes('desactivar subt?tulos') ||
+        transcript.includes('subtitulos off') ||
+        transcript.includes('subt?tulos off')
+    ) {
+        if (subtitlesActive) toggleSubtitles();
+        addLog('Voz: subtitulos OFF');
+        return;
+    }
+    if (
+        transcript.includes('activar subtitulos') ||
+        transcript.includes('activar subt?tulos') ||
+        transcript.includes('subtitulos on') ||
+        transcript.includes('subt?tulos on') ||
+        transcript.includes('subtitulos') ||
+        transcript.includes('subt?tulos')
+    ) {
+        if (!subtitlesActive) toggleSubtitles();
+        addLog('Voz: subtitulos ON');
         return;
     }
 }
@@ -692,8 +802,30 @@ function initSocketListeners() {
         removeHandFromList(data.userId);
     });
 
+    socket.on('presentation-state', (data) => {
+        slides = data.slides || slides;
+        updateSlideCounter();
+        participants = data.participants || [];
+        renderParticipants(participants);
+
+        if (Array.isArray(data.handRaised)) {
+            document.getElementById('hands-list').innerHTML = '';
+            data.handRaised.forEach((entry) => addHandToList(entry.userId, entry.name));
+        }
+    });
+
+    socket.on('participants-updated', (data) => {
+        participants = data || [];
+        renderParticipants(participants);
+    });
+
     socket.on('poll-updated', (data) => {
         updatePollResults(data.results, data.total);
+    });
+
+    socket.on('poll-started', (data) => {
+        updatePollResults(data.results, 0);
+        addNotification(`📊 Encuesta iniciada: ${data.poll.question}`, false);
     });
 
     socket.on('poll-ended', (data) => {
@@ -766,13 +898,42 @@ function addHandToList(userId, name) {
     container.appendChild(el);
 }
 
+function renderParticipants(list) {
+    const container = document.getElementById('participants-list');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    list.forEach((participant) => {
+        const item = document.createElement('div');
+        item.className = 'participant-item' + (participant.hasTurn ? ' turn-active' : '');
+
+        const icon = participant.role === 'presenter' ? '🎤' : '👤';
+        const roleLabel = participant.role === 'presenter' ? 'Presentador' : 'Espectador';
+        const hand = participant.handRaised ? '<span class="participant-hand">✋</span>' : '';
+
+        item.innerHTML = `
+            <div class="participant-main">
+                <span>${icon}</span>
+                <span class="participant-name">${participant.name}</span>
+            </div>
+            <div class="participant-main">
+                <span class="participant-role">${roleLabel}</span>
+                ${hand}
+            </div>
+        `;
+
+        container.appendChild(item);
+    });
+}
+
 function removeHandFromList(userId) {
     const el = document.getElementById('hand-' + userId);
     if (el) el.remove();
 }
 
 function dismissHand(userId) {
-    socket.emit('lower-hand', { userId });
+    emitGrantTurn(userId);
     removeHandFromList(userId);
     addNotification('Turno cedido', false);
 }

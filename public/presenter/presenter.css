@@ -96,8 +96,7 @@ main#slide-area {
 
 #slide-container {
     position: relative;
-    width: 90%;
-    max-width: 960px;
+    width: min(95%, 1420px);
     aspect-ratio: 16/9;
     background: #1a1a2e;
     border-radius: 8px;
@@ -124,6 +123,16 @@ main#slide-area {
     pointer-events: none;
     box-shadow: 0 0 12px rgba(124, 106, 247, 0.6);
     transition: left 0.05s, top 0.05s;
+}
+
+#pointer-dot.drawing-cursor {
+    width: auto;
+    height: auto;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    font-size: 1.6rem;
+    line-height: 1;
 }
 
 /* ZOOM OVERLAY */
@@ -169,6 +178,7 @@ main#slide-area {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    gap: 0;
 }
 
 #sidebar h3 {
@@ -183,6 +193,67 @@ main#slide-area {
     display: flex;
     flex-direction: column;
     gap: 6px;
+}
+
+.sidebar-bottom {
+    margin-top: auto;
+    padding-top: 20px;
+}
+
+.participants-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.participant-item {
+    background: #2a2a4a;
+    border-left: 3px solid #3a3a6a;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.participant-item.turn-active {
+    border-left-color: #f1c40f;
+    background: linear-gradient(90deg, rgba(241, 196, 15, 0.2), #2a2a4a 35%);
+    box-shadow: 0 0 0 1px rgba(241, 196, 15, 0.28);
+}
+
+.participant-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.participant-name {
+    color: white;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.participant-role {
+    color: #aaa;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.participant-hand {
+    color: #f39c12;
+    flex-shrink: 0;
+}
+
+@media (min-width: 2200px) {
+    #slide-container {
+        width: min(96%, 1640px);
+    }
 }
 
 .notification {

@@ -25,8 +25,8 @@ function emitTogglePresentation(isPresenting) {
     socket.emit('toggle-presentation', { isPresenting });
 }
 
-function emitZoomActivate(x, y) {
-    socket.emit('zoom-activate', { target: { x, y } });
+function emitZoomActivate(x, y, scale = 1) {
+    socket.emit('zoom-activate', { target: { x, y }, scale });
 }
 
 function emitZoomDeactivate() {
@@ -41,8 +41,8 @@ function emitPointerHide() {
     socket.emit('pointer-hide');
 }
 
-function emitSetTotalSlides(total) {
-    socket.emit('set-total-slides', { total });
+function emitSetTotalSlides(total, slides = []) {
+    socket.emit('set-total-slides', { total, slides });
 }
 
 // ─── DIBUJO ───────────────────────────────────────────────────
@@ -83,4 +83,16 @@ function emitLowerHand() {
 
 function emitPollVote(option) {
     socket.emit('poll-vote', { option });
+}
+
+function emitGrantTurn(userId) {
+    socket.emit('grant-turn', { userId });
+}
+
+function emitRequestPresentationState() {
+    socket.emit('request-presentation-state');
+}
+
+function emitRegisterParticipant(role, name) {
+    socket.emit('register-participant', { role, name });
 }

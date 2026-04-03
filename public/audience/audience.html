@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GestureSlides - Espectador</title>
-    <link rel="stylesheet" href="audience.css">
+    <link rel="stylesheet" href="/audience/audience.css">
 </head>
 <body>
 
@@ -62,6 +62,11 @@
 
                 <h3 style="margin-top:20px">Notificaciones</h3>
                 <div id="notifications"></div>
+
+                <div class="sidebar-bottom">
+                    <h3>Usuarios conectados</h3>
+                    <div id="participants-list" class="participants-list"></div>
+                </div>
             </div>
 
         </main>
@@ -85,6 +90,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/socket-client.js"></script>
-    <script src="audience.js"></script>
+    <script src="/audience/audience.js"></script>
 </body>
 </html>
