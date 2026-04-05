@@ -17,6 +17,8 @@
                 <span id="slide-counter">0 / 0</span>
                 <span id="status-hand">✋ Mano: OFF</span>
                 <button id="btn-hand" onclick="toggleHandRaise()">✋ Levantar mano</button>
+                <button id="btn-camera" onclick="toggleCamera()">📷 Camara</button>
+                <button id="btn-mic" onclick="toggleMicrophone()">🎤 Micro</button>
                 <button id="btn-fullscreen" onclick="toggleFullscreen()">⛶ Pantalla completa</button>
             </div>
         </header>
@@ -83,6 +85,8 @@
         </div>
         <div id="gallery-grid" class="gallery-grid"></div>
     </div>
+
+    <div id="remote-audio-host" style="display:none"></div>
 
     <!-- MODAL: introducir nombre -->
     <div id="name-modal">

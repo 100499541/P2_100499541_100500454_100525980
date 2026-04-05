@@ -104,3 +104,19 @@ function emitCameraStatus(enabled) {
 function emitCameraFrame(frame) {
     socket.emit('camera-frame', { frame });
 }
+
+function emitCameraClear() {
+    socket.emit('camera-clear');
+}
+
+function emitMicStatus(enabled) {
+    socket.emit('mic-status', { enabled });
+}
+
+function emitReleaseTurn() {
+    socket.emit('release-turn');
+}
+
+function emitAudioRefresh() {
+    socket.emit('audio-refresh');
+}

@@ -1,4 +1,4 @@
-// =============================================
+﻿// =============================================
 // VARIABLES GLOBALES
 // =============================================
 let slides = [];
@@ -31,19 +31,25 @@ let participants = [];
 let cameraSnapshots = {};
 let galleryExpanded = false;
 let cameraBroadcastInterval = null;
+let cameraEnabled = true;
+let micEnabled = false;
+let localAudioStream = null;
+let localAudioTrack = null;
+const audioPeerConnections = new Map();
+const remoteAudioElements = new Map();
 
-// ─── DIBUJO ───────────────────────────────────────────────────
+// --- DIBUJO ---------------------------------------------------
 let drawingMode = false;
 let isDrawing = false;
 let lastDrawPoint = null;
 const DRAW_COLOR = '#ff4757';
 const DRAW_WIDTH = 4;
 
-// ─── SUBTÍTULOS ───────────────────────────────────────────────
+// --- SUBTÍTULOS -----------------------------------------------
 let subtitlesActive = false;
 let subtitleTimeout = null;
 
-// ─── ENCUESTA ─────────────────────────────────────────────────
+// --- ENCUESTA -------------------------------------------------
 let pollActive = false;
 let pendingPollQuestion = null; // guardamos la pregunta mientras esperamos opciones
 let pollOptionsCaptureActive = false;
@@ -125,18 +131,18 @@ function togglePresentation() {
     const btn = document.getElementById('btn-start');
 
     if (isPresenting) {
-        btn.textContent = '⏹ Detener';
+        btn.textContent = '\u23F9 Detener';
         btn.classList.add('active');
         addNotification('Presentación iniciada', false);
         gestureActive = true;
-        document.getElementById('status-gesture').textContent = '👋 Gestos: ON';
+        document.getElementById('status-gesture').textContent = '\uD83D\uDC4B Gestos: ON';
         document.getElementById('status-gesture').classList.add('active');
     } else {
-        btn.textContent = '▶ Iniciar';
+        btn.textContent = '\u25B6 Iniciar';
         btn.classList.remove('active');
         addNotification('Presentación detenida', false);
         gestureActive = false;
-        document.getElementById('status-gesture').textContent = '👋 Gestos: OFF';
+        document.getElementById('status-gesture').textContent = '\uD83D\uDC4B Gestos: OFF';
         document.getElementById('status-gesture').classList.remove('active');
         deactivateZoom();
     }
@@ -387,7 +393,7 @@ function updateDrawingCursor(landmarks) {
     const y = landmarks[8].y * rect.height;
 
     dot.classList.add('drawing-cursor');
-    dot.textContent = '✏️';
+    dot.textContent = '\u270F\uFE0F';
     dot.style.display = 'block';
     dot.style.left = x + 'px';
     dot.style.top = y + 'px';
@@ -473,14 +479,14 @@ function toggleDrawingMode() {
     if (drawingMode) {
         canvas.style.pointerEvents = 'none'; // el dibujo lo hace el gesto, no el ratón
         btn.classList.add('active');
-        addNotification('✏️ Modo dibujo ON', false);
+        addNotification('\u270F\uFE0F Modo dibujo ON', false);
         addLog('Dibujo activado');
         document.getElementById('pointer-dot').classList.add('drawing-cursor');
     } else {
         isDrawing = false;
         lastDrawPoint = null;
         btn.classList.remove('active');
-        addNotification('✏️ Modo dibujo OFF', false);
+        addNotification('\u270F\uFE0F Modo dibujo OFF', false);
         addLog('Dibujo desactivado');
         hidePointer();
     }
@@ -492,7 +498,7 @@ function handleDrawingGesture(landmarks) {
     const ringUp   = landmarks[16].y < landmarks[14].y;
     const pinkyUp  = landmarks[20].y < landmarks[18].y;
 
-    // Solo índice levantado → dibuja
+    // Solo índice levantado ? dibuja
     const shouldDraw = indexUp && !middleUp && !ringUp && !pinkyUp;
 
     const slideContainer = document.getElementById('slide-container');
@@ -529,7 +535,7 @@ function handleDrawingGesture(landmarks) {
 
         lastDrawPoint = { x, y };
     } else {
-        // Mano levantada con más dedos → cortar trazo
+        // Mano levantada con más dedos ? cortar trazo
         if (isDrawing) {
             isDrawing = false;
             lastDrawPoint = null;
@@ -555,7 +561,7 @@ function toggleSubtitles() {
     if (subtitlesActive) {
         btn.classList.add('active');
         el.style.display = 'block';
-        addNotification('📝 Subtítulos ON', false);
+        addNotification('\uD83D\uDCDD Subtítulos ON', false);
         addLog('Subtítulos activados');
     } else {
         btn.classList.remove('active');
@@ -590,12 +596,12 @@ function toggleVoice() {
 
     if (voiceActive) {
         btn.classList.add('active');
-        statusEl.textContent = '🎙 Voz: ON';
+        statusEl.textContent = '\uD83C\uDFA4 Voz: ON';
         statusEl.classList.add('active');
         startVoiceRecognition();
     } else {
         btn.classList.remove('active');
-        statusEl.textContent = '🎙 Voz: OFF';
+        statusEl.textContent = '\uD83C\uDFA4 Voz: OFF';
         statusEl.classList.remove('active');
         stopVoiceRecognition();
     }
@@ -701,26 +707,33 @@ function startPollOptionsCapture(initialChunk = '') {
 
 function parseSinglePollOption(text) {
     const normalizedText = normalizeVoiceText(text);
-    const match = normalizedText.match(/^(?:opcion|respuesta)?\s*(a|b|c|d|de|e|f)(?:\s*[:\-]?\s+)(.+)$/);
-    if (!match) return null;
-
     const letterMap = {
         a: 0,
         b: 1,
+        be: 1,
+        ve: 1,
         c: 2,
+        ce: 2,
+        se: 2,
         d: 3,
         de: 3,
         e: 4,
         f: 5,
     };
+    const markerRegex = /(?:^|\s)(?:opcion|respuesta)?\s*(a|b|be|ve|c|ce|se|d|de|e|f)\s*[:\-]?\s*/g;
+    const matches = Array.from(normalizedText.matchAll(markerRegex));
+    if (matches.length === 0) return null;
 
-    const optionIndex = letterMap[match[1]];
+    const lastMatch = matches[matches.length - 1];
+    const optionKey = lastMatch[1];
+    const optionIndex = letterMap[optionKey];
     if (optionIndex === undefined) return null;
 
-    return {
-        index: optionIndex,
-        label: match[2].trim(),
-    };
+    const markerEnd = lastMatch.index + lastMatch[0].length;
+    const label = normalizedText.slice(markerEnd).trim();
+    if (!label) return null;
+
+    return { index: optionIndex, label };
 }
 
 function queuePollOption(chunk) {
@@ -1003,7 +1016,7 @@ function confirmFinish() {
         isPresenting = false;
         emitTogglePresentation(false);
         addNotification('Presentación finalizada', true);
-        document.getElementById('btn-start').textContent = '▶ Iniciar';
+        document.getElementById('btn-start').textContent = '\u25B6 Iniciar';
         document.getElementById('btn-start').classList.remove('active');
         if (drawingMode) toggleDrawingMode();
         if (subtitlesActive) toggleSubtitles();
@@ -1027,7 +1040,7 @@ function toggleFullscreen() {
 function initSocketListeners() {
     socket.on('hand-raised', (data) => {
         addHandToList(data.userId, data.name);
-        addNotification(`✋ ${data.name} levantó la mano`, true);
+        addNotification(`? ${data.name} levantó la mano`, true);
     });
 
     socket.on('hand-lowered', (data) => {
@@ -1040,6 +1053,7 @@ function initSocketListeners() {
         participants = data.participants || [];
         cameraSnapshots = data.cameraSnapshots || cameraSnapshots;
         renderParticipants(participants);
+        syncAudioReceivers();
 
         if (Array.isArray(data.handRaised)) {
             document.getElementById('hands-list').innerHTML = '';
@@ -1050,6 +1064,7 @@ function initSocketListeners() {
     socket.on('participants-updated', (data) => {
         participants = data || [];
         renderParticipants(participants);
+        syncAudioReceivers();
     });
 
     socket.on('camera-frame', (data) => {
@@ -1062,18 +1077,27 @@ function initSocketListeners() {
         renderParticipants(participants);
     });
 
+    socket.on('webrtc-offer', (data) => handleOffer(data.from, data.sdp));
+    socket.on('webrtc-answer', (data) => handleAnswer(data.from, data.sdp));
+    socket.on('webrtc-ice-candidate', (data) => handleIceCandidate(data.from, data.candidate));
+    socket.on('audio-refresh', (data) => {
+        if (data?.userId && data.userId !== socket.id) {
+            rebuildAudioConnectionFor(data.userId);
+        }
+    });
+
     socket.on('poll-updated', (data) => {
         updatePollResults(data.results, data.total);
     });
 
     socket.on('poll-started', (data) => {
         updatePollResults(data.results, 0);
-        addNotification(`📊 Encuesta iniciada: ${data.poll.question}`, false);
+        addNotification(`\uD83D\uDCCA Encuesta iniciada: ${data.poll.question}`, false);
     });
 
     socket.on('poll-ended', (data) => {
         updatePollResults(data.results, null);
-        addNotification('📊 Encuesta finalizada', false);
+        addNotification('\uD83D\uDCCA Encuesta finalizada', false);
     });
 }
 
@@ -1137,7 +1161,7 @@ function addHandToList(userId, name) {
     const el = document.createElement('div');
     el.className = 'hand-item';
     el.id = 'hand-' + userId;
-    el.innerHTML = `✋ ${name} <button onclick="dismissHand('${userId}')">Dar turno</button>`;
+    el.innerHTML = `? ${name} <button onclick="dismissHand('${userId}')">Dar turno</button>`;
     container.appendChild(el);
 }
 
@@ -1151,9 +1175,9 @@ function renderParticipants(list) {
         const item = document.createElement('div');
         item.className = 'participant-item' + (participant.hasTurn ? ' turn-active' : '');
 
-        const icon = participant.role === 'presenter' ? '🎤' : '👤';
+        const icon = participant.role === 'presenter' ? '\uD83C\uDFA4' : '\uD83D\uDC64';
         const roleLabel = participant.role === 'presenter' ? 'Presentador' : 'Espectador';
-        const hand = participant.handRaised ? '<span class="participant-hand">✋</span>' : '';
+        const hand = participant.handRaised ? '<span class="participant-hand">\u270B</span>' : '';
 
         item.innerHTML = `
             <div class="participant-main">
@@ -1185,9 +1209,9 @@ function buildParticipantCard(participant, expanded) {
     const item = document.createElement('div');
     item.className = 'participant-item' + (participant.hasTurn ? ' turn-active' : '');
 
-    const icon = participant.role === 'presenter' ? '🎤' : '👤';
+    const icon = participant.role === 'presenter' ? '\uD83C\uDFA4' : '\uD83D\uDC64';
     const roleLabel = participant.role === 'presenter' ? 'Presentador' : 'Espectador';
-    const hand = participant.handRaised ? '<span class="participant-hand">✋</span>' : '';
+    const hand = participant.handRaised ? '<span class="participant-hand">\u270B</span>' : '';
     const cameraFrame = cameraSnapshots[participant.userId];
     const cameraContent = cameraFrame
         ? `<img src="${cameraFrame}" alt="Camara de ${participant.name}">`
@@ -1238,8 +1262,217 @@ function toggleParticipantsView() {
     }
 }
 
+function updateCameraButton() {
+    const btn = document.getElementById('btn-camera');
+    if (!btn) return;
+    btn.textContent = cameraEnabled ? '📷 Camara ON' : '📷 Camara OFF';
+    btn.classList.toggle('active', cameraEnabled);
+}
+
+function toggleCamera() {
+    const videoEl = document.getElementById('camera-feed');
+    const videoTrack = videoEl?.srcObject?.getVideoTracks?.()[0];
+
+    if (!videoTrack) {
+        addNotification('No se pudo controlar la camara', true);
+        return;
+    }
+
+    cameraEnabled = !cameraEnabled;
+    videoTrack.enabled = cameraEnabled;
+    syncLocalAudioTrackState();
+    emitCameraStatus(cameraEnabled);
+    updateCameraButton();
+
+    if (cameraEnabled) {
+        startCameraBroadcast(videoEl);
+    } else {
+        if (cameraBroadcastInterval) clearInterval(cameraBroadcastInterval);
+        emitCameraClear();
+    }
+
+    if (micEnabled) emitAudioRefresh();
+}
+
+function updateMicButton() {
+    const btn = document.getElementById('btn-mic');
+    if (!btn) return;
+    btn.textContent = micEnabled ? '🎤 Micro ON' : '🎤 Micro OFF';
+    btn.classList.toggle('active', micEnabled);
+}
+
+function syncLocalAudioTrackState() {
+    if (!localAudioTrack) return;
+    localAudioTrack.enabled = micEnabled;
+
+    audioPeerConnections.forEach((pc) => {
+        pc.getSenders()
+            .filter((sender) => sender.track && sender.track.kind === 'audio')
+            .forEach((sender) => {
+                sender.track.enabled = micEnabled;
+            });
+    });
+}
+
+async function toggleMicrophone() {
+    if (micEnabled) {
+        disableMicrophone();
+        return;
+    }
+
+    try {
+        if (!localAudioStream) {
+            localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            localAudioTrack = localAudioStream.getAudioTracks()[0];
+        }
+
+        micEnabled = true;
+        syncLocalAudioTrackState();
+        emitMicStatus(true);
+        updateMicButton();
+        syncAudioReceivers();
+        emitAudioRefresh();
+        addNotification('Microfono activado', false);
+    } catch (error) {
+        addNotification('No se pudo activar el microfono: ' + error.message, true);
+    }
+}
+
+function disableMicrophone() {
+    micEnabled = false;
+    syncLocalAudioTrackState();
+    emitMicStatus(false);
+    updateMicButton();
+    emitAudioRefresh();
+}
+
+function createPeerConnection(remoteId) {
+    const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    });
+
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            socket.emit('webrtc-ice-candidate', {
+                target: remoteId,
+                candidate: event.candidate,
+            });
+        }
+    };
+
+    pc.ontrack = (event) => {
+        attachRemoteAudio(remoteId, event.streams[0]);
+    };
+
+    pc.onconnectionstatechange = () => {
+        if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+            removeRemoteAudio(remoteId);
+            audioPeerConnections.delete(remoteId);
+        }
+    };
+
+    audioPeerConnections.set(remoteId, pc);
+    return pc;
+}
+
+function attachRemoteAudio(remoteId, stream) {
+    let audio = remoteAudioElements.get(remoteId);
+    if (!audio) {
+        audio = document.createElement('audio');
+        audio.autoplay = true;
+        audio.playsInline = true;
+        remoteAudioElements.set(remoteId, audio);
+        document.body.appendChild(audio);
+    }
+
+    if (audio.srcObject !== stream) {
+        audio.srcObject = stream;
+    }
+}
+
+function removeRemoteAudio(remoteId) {
+    const audio = remoteAudioElements.get(remoteId);
+    if (audio) {
+        audio.srcObject = null;
+        audio.remove();
+        remoteAudioElements.delete(remoteId);
+    }
+}
+
+function rebuildAudioConnectionFor(remoteId) {
+    const pc = audioPeerConnections.get(remoteId);
+    if (pc) {
+        try { pc.close(); } catch {}
+        audioPeerConnections.delete(remoteId);
+    }
+    removeRemoteAudio(remoteId);
+
+    const participant = participants.find((entry) => entry.userId === remoteId);
+    if (participant?.micEnabled) {
+        setTimeout(() => createReceiveOffer(remoteId), 100);
+    }
+}
+
+async function createReceiveOffer(remoteId) {
+    const pc = audioPeerConnections.get(remoteId) || createPeerConnection(remoteId);
+    if (pc.signalingState !== 'stable') return;
+
+    pc.addTransceiver('audio', { direction: 'recvonly' });
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('webrtc-offer', { target: remoteId, sdp: pc.localDescription });
+}
+
+function syncAudioReceivers() {
+    participants
+        .filter((participant) => participant.userId !== socket.id && participant.micEnabled)
+        .forEach((participant) => {
+            if (!audioPeerConnections.has(participant.userId)) {
+                createReceiveOffer(participant.userId);
+            }
+        });
+
+    audioPeerConnections.forEach((pc, remoteId) => {
+        if (!participants.some((participant) => participant.userId === remoteId && participant.micEnabled)) {
+            try { pc.close(); } catch {}
+            removeRemoteAudio(remoteId);
+            audioPeerConnections.delete(remoteId);
+        }
+    });
+}
+
+async function handleOffer(from, sdp) {
+    const pc = audioPeerConnections.get(from) || createPeerConnection(from);
+
+    if (localAudioTrack && !pc.getSenders().some((sender) => sender.track === localAudioTrack)) {
+        pc.addTrack(localAudioTrack, localAudioStream);
+    }
+
+    await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('webrtc-answer', { target: from, sdp: pc.localDescription });
+}
+
+async function handleAnswer(from, sdp) {
+    const pc = audioPeerConnections.get(from);
+    if (!pc) return;
+    await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+}
+
+async function handleIceCandidate(from, candidate) {
+    const pc = audioPeerConnections.get(from);
+    if (!pc) return;
+    try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch {}
+}
+
 function setupExtendedPresenterHooks() {
     const videoEl = document.getElementById('camera-feed');
+    updateCameraButton();
+    updateMicButton();
+
     if (videoEl) {
         videoEl.addEventListener('loadeddata', () => {
             emitCameraStatus(true);
@@ -1299,4 +1532,5 @@ function setupExtendedPresenterHooks() {
 }
 
 window.addEventListener('load', setupExtendedPresenterHooks);
+
 

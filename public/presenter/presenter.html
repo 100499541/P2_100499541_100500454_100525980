@@ -103,6 +103,8 @@
             <div id="controls">
                 <button id="btn-start"      onclick="togglePresentation()">▶ Iniciar</button>
                 <button id="btn-voice"      onclick="toggleVoice()">🎙 Voz</button>
+                <button id="btn-camera"     onclick="toggleCamera()">📷 Camara</button>
+                <button id="btn-mic"        onclick="toggleMicrophone()">🎤 Micro</button>
                 <button id="btn-draw"       onclick="toggleDrawingMode()">✏️ Dibujar</button>
                 <button id="btn-subtitles"  onclick="toggleSubtitles()">📝 Subtítulos</button>
                 <button onclick="clearDrawingCanvas()">🗑️ Borrar</button>
@@ -176,6 +178,8 @@
             <div id="voice-result"></div>
         </div>
     </div>
+
+    <div id="remote-audio-host" style="display:none"></div>
 
     <!-- SCRIPTS -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>

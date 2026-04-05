@@ -112,6 +112,7 @@ io.on('connection', (socket) => {
             handRaised: participants.get(socket.id)?.handRaised || false,
             hasTurn: participants.get(socket.id)?.hasTurn || false,
             cameraEnabled: participants.get(socket.id)?.cameraEnabled || false,
+            micEnabled: participants.get(socket.id)?.micEnabled || false,
         });
         broadcastParticipants();
     });
@@ -256,6 +257,58 @@ io.on('connection', (socket) => {
         io.emit('camera-frame', {
             userId: socket.id,
             frame: data.frame,
+        });
+    });
+
+    socket.on('camera-clear', () => {
+        cameraSnapshots.delete(socket.id);
+        io.emit('camera-frame-cleared', { userId: socket.id });
+    });
+
+    socket.on('mic-status', (data) => {
+        if (!participants.has(socket.id)) return;
+
+        const participant = participants.get(socket.id);
+        participant.micEnabled = !!data?.enabled;
+        participants.set(socket.id, participant);
+        broadcastParticipants();
+    });
+
+    socket.on('release-turn', () => {
+        if (!participants.has(socket.id)) return;
+
+        const participant = participants.get(socket.id);
+        participant.hasTurn = false;
+        participant.micEnabled = false;
+        participants.set(socket.id, participant);
+        broadcastParticipants();
+    });
+
+    socket.on('audio-refresh', () => {
+        io.emit('audio-refresh', { userId: socket.id });
+    });
+
+    socket.on('webrtc-offer', (data) => {
+        if (!data?.target || !data?.sdp) return;
+        io.to(data.target).emit('webrtc-offer', {
+            from: socket.id,
+            sdp: data.sdp,
+        });
+    });
+
+    socket.on('webrtc-answer', (data) => {
+        if (!data?.target || !data?.sdp) return;
+        io.to(data.target).emit('webrtc-answer', {
+            from: socket.id,
+            sdp: data.sdp,
+        });
+    });
+
+    socket.on('webrtc-ice-candidate', (data) => {
+        if (!data?.target || !data?.candidate) return;
+        io.to(data.target).emit('webrtc-ice-candidate', {
+            from: socket.id,
+            candidate: data.candidate,
         });
     });
 

@@ -73,6 +73,12 @@ body {
     border-color: #27ae60;
 }
 
+#btn-camera.active,
+#btn-mic.active {
+    background: #27ae60;
+    border-color: #27ae60;
+}
+
 #status {
     display: flex;
     gap: 16px;
@@ -381,7 +387,7 @@ body.gallery-mode #gesture-canvas {
 
 @media (min-width: 2200px) {
     #slide-container {
-        width: min(96%, 1640px);
+        width: min(97%, 1780px);
     }
 }
 
