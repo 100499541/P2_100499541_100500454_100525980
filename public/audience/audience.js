@@ -7,6 +7,9 @@ let gestureDetectionActive = false;
 let hasVoted = false;
 let slides = [];
 let participants = [];
+let cameraSnapshots = {};
+let galleryExpanded = false;
+let cameraBroadcastInterval = null;
 
 // MediaPipe
 let hands = null;
@@ -296,10 +299,18 @@ function renderPollResults(results, total) {
 }
 
 function closePoll(results) {
-    renderPollResults(results);
-    document.querySelectorAll('#poll-options button').forEach(btn => {
-        btn.disabled = true;
-    });
+    const section = document.getElementById('poll-section');
+    const question = document.getElementById('poll-question');
+    const options = document.getElementById('poll-options');
+    const resultsEl = document.getElementById('poll-results');
+    const votedMsg = document.getElementById('poll-voted-msg');
+
+    options.innerHTML = '';
+    resultsEl.innerHTML = '';
+    question.textContent = '';
+    votedMsg.style.display = 'none';
+    hasVoted = false;
+    section.style.display = 'none';
     addNotification('📊 Encuesta finalizada', false);
 }
 
@@ -537,3 +548,108 @@ function renderParticipants(list) {
         container.appendChild(item);
     });
 }
+
+function startAudienceCameraBroadcast(videoEl) {
+    if (cameraBroadcastInterval) clearInterval(cameraBroadcastInterval);
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const sendFrame = () => {
+        if (!videoEl.videoWidth || !videoEl.videoHeight) return;
+
+        canvas.width = 320;
+        canvas.height = 180;
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        emitCameraFrame(canvas.toDataURL('image/jpeg', 0.6));
+    };
+
+    sendFrame();
+    cameraBroadcastInterval = setInterval(sendFrame, 1500);
+}
+
+function buildAudienceParticipantCard(participant, expanded) {
+    const item = document.createElement('div');
+    item.className = 'participant-item' + (participant.hasTurn ? ' turn-active' : '');
+
+    const icon = participant.role === 'presenter' ? '🎤' : '👤';
+    const roleLabel = participant.role === 'presenter' ? 'Presentador' : 'Espectador';
+    const hand = participant.handRaised ? '<span class="participant-hand">✋</span>' : '';
+    const cameraFrame = cameraSnapshots[participant.userId];
+    const cameraContent = cameraFrame
+        ? `<img src="${cameraFrame}" alt="Camara de ${participant.name}">`
+        : `<div class="participant-camera-placeholder">${participant.cameraEnabled ? 'Camara activa' : 'Camara apagada'}</div>`;
+
+    item.innerHTML = `
+        <div class="participant-camera">${cameraContent}</div>
+        <div class="participant-main">
+            <span>${icon}</span>
+            <span class="participant-name">${participant.name}</span>
+        </div>
+        <div class="participant-main">
+            <span class="participant-role">${roleLabel}</span>
+            ${hand}
+        </div>
+    `;
+
+    if (!expanded) {
+        item.style.minHeight = '0';
+    }
+
+    return item;
+}
+
+function renderParticipants(list) {
+    const summaryContainer = document.getElementById('participants-list');
+    const galleryContainer = document.getElementById('gallery-grid');
+    if (!summaryContainer || !galleryContainer) return;
+
+    summaryContainer.innerHTML = '';
+    galleryContainer.innerHTML = '';
+
+    const summaryParticipants = list.filter((participant) => participant.role === 'presenter');
+    (summaryParticipants.length ? summaryParticipants : list.slice(0, 1)).forEach((participant) => {
+        summaryContainer.appendChild(buildAudienceParticipantCard(participant, false));
+    });
+
+    list.forEach((participant) => {
+        galleryContainer.appendChild(buildAudienceParticipantCard(participant, true));
+    });
+}
+
+function toggleParticipantsView() {
+    galleryExpanded = !galleryExpanded;
+    document.body.classList.toggle('gallery-mode', galleryExpanded);
+    const overlay = document.getElementById('gallery-overlay');
+    if (overlay) {
+        overlay.style.display = galleryExpanded ? 'block' : 'none';
+    }
+}
+
+function setupExtendedAudienceHooks() {
+    const videoEl = document.getElementById('camera-feed');
+    if (videoEl) {
+        videoEl.addEventListener('loadeddata', () => {
+            emitCameraStatus(true);
+            startAudienceCameraBroadcast(videoEl);
+        });
+    }
+
+    socket.on('camera-frame', (data) => {
+        cameraSnapshots[data.userId] = data.frame;
+        renderParticipants(participants);
+    });
+
+    socket.on('camera-frame-cleared', (data) => {
+        delete cameraSnapshots[data.userId];
+        renderParticipants(participants);
+    });
+
+    socket.on('presentation-state', (data) => {
+        cameraSnapshots = data.cameraSnapshots || cameraSnapshots;
+        renderParticipants(data.participants || participants);
+    });
+}
+
+window.addEventListener('load', setupExtendedAudienceHooks);
+

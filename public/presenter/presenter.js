@@ -28,6 +28,9 @@ const ZOOM_STEP = 0.45;
 const MAX_ZOOM_SCALE = 3.25;
 let prevPinchDistance = null;
 let participants = [];
+let cameraSnapshots = {};
+let galleryExpanded = false;
+let cameraBroadcastInterval = null;
 
 // ─── DIBUJO ───────────────────────────────────────────────────
 let drawingMode = false;
@@ -43,6 +46,13 @@ let subtitleTimeout = null;
 // ─── ENCUESTA ─────────────────────────────────────────────────
 let pollActive = false;
 let pendingPollQuestion = null; // guardamos la pregunta mientras esperamos opciones
+let pollOptionsCaptureActive = false;
+let pollDraftOptions = [];
+let pendingPollOption = null;
+let pollOptionCommitTimer = null;
+let pollFinalizeTimer = null;
+const POLL_OPTION_COMMIT_DELAY = 3000;
+const POLL_NEXT_OPTION_WAIT_DELAY = 5000;
 
 // =============================================
 // INICIALIZACIÓN
@@ -320,6 +330,25 @@ function executeGesture(gesture, landmarks) {
         case 'two_fingers':
             break;
     }
+}
+
+function startCameraBroadcast(videoEl) {
+    if (cameraBroadcastInterval) clearInterval(cameraBroadcastInterval);
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const sendFrame = () => {
+        if (!videoEl.videoWidth || !videoEl.videoHeight) return;
+
+        canvas.width = 320;
+        canvas.height = 180;
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        emitCameraFrame(canvas.toDataURL('image/jpeg', 0.6));
+    };
+
+    sendFrame();
+    cameraBroadcastInterval = setInterval(sendFrame, 1500);
 }
 
 function distanceBetween(a, b) {
@@ -632,106 +661,314 @@ function stopVoiceRecognition() {
     }
 }
 
+function normalizeVoiceText(text) {
+    return (text || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[.,;]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function isReservedCommand(normalizedTranscript) {
+    return [
+        'siguiente', 'avanzar', 'anterior', 'retroceder', 'atras',
+        'diapositiva', 'iniciar', 'empezar', 'comenzar', 'pausar', 'pausa',
+        'cerrar encuesta', 'finalizar encuesta', 'finalizar presentacion',
+        'terminar presentacion', 'cerrar presentacion', 'quitar zoom',
+        'quitar zum', 'reducir', 'zoom', 'zum', 'ampliar', 'dejar de dibujar',
+        'salir dibujo', 'desactivar dibujo', 'desactivar dibujar',
+        'dibujar', 'modo dibujo', 'activar dibujo', 'borrar', 'limpiar',
+        'desactivar subtitulos', 'subtitulos off', 'activar subtitulos', 'subtitulos on'
+    ].some((command) => normalizedTranscript.includes(command));
+}
+
+function startPollOptionsCapture(initialChunk = '') {
+    pollOptionsCaptureActive = true;
+    pollDraftOptions = [];
+    pendingPollOption = null;
+    clearTimeout(pollOptionCommitTimer);
+    clearTimeout(pollFinalizeTimer);
+    setPollCaptureStatus('Esperando primera opcion...');
+
+    if (initialChunk) {
+        queuePollOption(initialChunk);
+    } else {
+        updatePollDraftPreview();
+    }
+}
+
+function parseSinglePollOption(text) {
+    const normalizedText = normalizeVoiceText(text);
+    const match = normalizedText.match(/^(?:opcion|respuesta)?\s*(a|b|c|d|de|e|f)(?:\s*[:\-]?\s+)(.+)$/);
+    if (!match) return null;
+
+    const letterMap = {
+        a: 0,
+        b: 1,
+        c: 2,
+        d: 3,
+        de: 3,
+        e: 4,
+        f: 5,
+    };
+
+    const optionIndex = letterMap[match[1]];
+    if (optionIndex === undefined) return null;
+
+    return {
+        index: optionIndex,
+        label: match[2].trim(),
+    };
+}
+
+function queuePollOption(chunk) {
+    const parsedOption = parseSinglePollOption(chunk);
+    if (!parsedOption || !parsedOption.label) return false;
+
+    if (pendingPollOption) {
+        commitPendingPollOption();
+    }
+
+    pendingPollOption = parsedOption;
+    clearTimeout(pollOptionCommitTimer);
+    clearTimeout(pollFinalizeTimer);
+    setPollCaptureStatus(`Guardando opcion ${String.fromCharCode(65 + parsedOption.index)}...`);
+    updatePollDraftPreview();
+    pollOptionCommitTimer = setTimeout(commitPendingPollOption, POLL_OPTION_COMMIT_DELAY);
+    return true;
+}
+
+function commitPendingPollOption() {
+    if (!pendingPollOption) return;
+
+    pollDraftOptions[pendingPollOption.index] = pendingPollOption.label;
+    pendingPollOption = null;
+    updatePollDraftPreview();
+    setPollCaptureStatus('Esperando siguiente opcion...');
+    clearTimeout(pollFinalizeTimer);
+    pollFinalizeTimer = setTimeout(finalizePendingPoll, POLL_NEXT_OPTION_WAIT_DELAY);
+}
+
+function getPollDraftOptions() {
+    return pollDraftOptions.filter(Boolean);
+}
+
+function setPollCaptureStatus(message = '') {
+    const statusEl = document.getElementById('poll-capture-status');
+    if (!statusEl) return;
+
+    statusEl.textContent = message;
+    statusEl.style.display = message ? 'block' : 'none';
+}
+
+function updatePollDraftPreview() {
+    const previewEl = document.getElementById('poll-draft-preview');
+    const questionEl = document.getElementById('poll-question-label');
+    const options = getPollDraftOptions();
+    if (!previewEl || !questionEl) return;
+
+    if (!pendingPollQuestion) {
+        previewEl.style.display = 'none';
+        previewEl.innerHTML = '';
+        questionEl.textContent = 'Sin encuesta activa';
+        setPollCaptureStatus('');
+        return;
+    }
+
+    questionEl.textContent = `Pregunta: ${pendingPollQuestion}`;
+    previewEl.style.display = pollOptionsCaptureActive || options.length > 0 ? 'block' : 'none';
+    previewEl.innerHTML = `
+        <strong>Borrador por voz</strong><br>
+        ${options.length > 0 ? options.map((option, index) => `${String.fromCharCode(65 + index)}. ${option}`).join('<br>') : 'Esperando opciones...'}
+    `;
+}
+
+function finalizePendingPoll() {
+    clearTimeout(pollOptionCommitTimer);
+    clearTimeout(pollFinalizeTimer);
+
+    const options = getPollDraftOptions();
+    if (!pendingPollQuestion || options.length === 0) {
+        pollOptionsCaptureActive = false;
+        pollDraftOptions = [];
+        pendingPollOption = null;
+        updatePollDraftPreview();
+        setPollCaptureStatus('');
+        addNotification('No se pudieron interpretar las opciones de la encuesta', true);
+        addLog('Voz: encuesta cancelada por opciones inválidas');
+        return;
+    }
+
+    emitPollStart(pendingPollQuestion, options);
+    pollActive = true;
+    pollOptionsCaptureActive = false;
+    pollDraftOptions = [];
+    pendingPollOption = null;
+    document.getElementById('poll-results').innerHTML = '';
+    document.getElementById('poll-question-label').textContent = `Pregunta: ${pendingPollQuestion}`;
+    document.getElementById('poll-draft-preview').style.display = 'none';
+    document.getElementById('poll-draft-preview').innerHTML = '';
+    setPollCaptureStatus('');
+    addNotification('Encuesta lanzada', false);
+    addLog('Voz: encuesta iniciada');
+}
+
 function processVoiceCommand(transcript) {
-    if (transcript.includes('siguiente') || transcript.includes('avanzar')) {
+    const normalizedTranscript = normalizeVoiceText(transcript);
+
+    if (normalizedTranscript.includes('siguiente') || normalizedTranscript.includes('avanzar')) {
         nextSlide();
         addLog('Voz: siguiente');
         return;
     }
-    if (transcript.includes('anterior') || transcript.includes('retroceder') || transcript.includes('atras')) {
+    if (
+        normalizedTranscript.includes('anterior') ||
+        normalizedTranscript.includes('retroceder') ||
+        normalizedTranscript.includes('atras')
+    ) {
         prevSlide();
         addLog('Voz: anterior');
         return;
     }
-    const matchSlide = transcript.match(/diapositiva\s+(\d+)/);
+    const matchSlide = normalizedTranscript.match(/diapositiva\s+(\d+)/);
     if (matchSlide) {
         goToSlide(parseInt(matchSlide[1]));
         addLog('Voz: ir a diapositiva ' + matchSlide[1]);
         return;
     }
 
-    if (transcript.includes('iniciar') || transcript.includes('empezar') || transcript.includes('comenzar')) {
+    if (
+        normalizedTranscript.includes('iniciar') ||
+        normalizedTranscript.includes('empezar') ||
+        normalizedTranscript.includes('comenzar')
+    ) {
         if (!isPresenting) togglePresentation();
         addLog('Voz: iniciar');
         return;
     }
-    if (transcript.includes('pausar') || transcript.includes('pausa')) {
+    if (normalizedTranscript.includes('pausar') || normalizedTranscript.includes('pausa')) {
         if (isPresenting) togglePresentation();
         addLog('Voz: pausar');
         return;
     }
 
-    if (transcript === 'lanzar encuesta') {
+    if (normalizedTranscript === 'lanzar encuesta') {
         pendingPollQuestion = 'Encuesta rapida';
+        pollOptionsCaptureActive = false;
+        pollDraftOptions = [];
+        pendingPollOption = null;
+        clearTimeout(pollOptionCommitTimer);
+        clearTimeout(pollFinalizeTimer);
+        setPollCaptureStatus('');
+        updatePollDraftPreview();
         addNotification('Pregunta guardada: "Encuesta rapida". Di "opciones Si No" o "opciones A B C"', false);
         addLog('Voz: pregunta encuesta = "Encuesta rapida"');
         return;
     }
 
-    const matchPoll = transcript.match(/lanzar encuesta\s+(.+)/);
+    const matchPoll = normalizedTranscript.match(/lanzar encuesta\s+(.+)/);
     if (matchPoll) {
         pendingPollQuestion = matchPoll[1].trim();
+        pollOptionsCaptureActive = false;
+        pollDraftOptions = [];
+        pendingPollOption = null;
+        clearTimeout(pollOptionCommitTimer);
+        clearTimeout(pollFinalizeTimer);
+        setPollCaptureStatus('');
+        updatePollDraftPreview();
         addNotification('Pregunta guardada: "' + pendingPollQuestion + '". Di "opciones Si No" o "opciones A B C"', false);
         addLog('Voz: pregunta encuesta = "' + pendingPollQuestion + '"');
         return;
     }
 
-    const matchOptions = transcript.match(/opciones\s+(.+)/);
-    if (matchOptions && pendingPollQuestion) {
-        const options = matchOptions[1].trim().split(/\s+/);
-        emitPollStart(pendingPollQuestion, options);
-        pollActive = true;
-        pendingPollQuestion = null;
-        addNotification('Encuesta lanzada', false);
-        addLog('Voz: encuesta iniciada');
+    if (pendingPollQuestion && normalizedTranscript === 'opciones') {
+        startPollOptionsCapture();
+        addNotification('Escuchando opciones de la encuesta...', false);
+        addLog('Voz: captura de opciones iniciada');
         return;
     }
 
-    if (transcript.includes('cerrar encuesta') || transcript.includes('finalizar encuesta')) {
+    const matchOptions = normalizedTranscript.match(/opciones\s+(.+)/);
+    if (matchOptions && pendingPollQuestion) {
+        startPollOptionsCapture(matchOptions[1].trim());
+        addNotification('Opciones de encuesta en captura', false);
+        addLog('Voz: opciones de encuesta capturadas');
+        return;
+    }
+
+    if (pollOptionsCaptureActive && pendingPollQuestion && !isReservedCommand(normalizedTranscript)) {
+        if (queuePollOption(normalizedTranscript)) {
+            addLog('Voz: opcion de encuesta capturada');
+        }
+        return;
+    }
+
+    if (normalizedTranscript.includes('cerrar encuesta') || normalizedTranscript.includes('finalizar encuesta')) {
         emitPollEnd();
         pollActive = false;
+        pollOptionsCaptureActive = false;
+        pollDraftOptions = [];
+        pendingPollOption = null;
+        clearTimeout(pollOptionCommitTimer);
+        clearTimeout(pollFinalizeTimer);
+        setPollCaptureStatus('');
+        updatePollDraftPreview();
         addNotification('Encuesta cerrada', false);
         addLog('Voz: encuesta cerrada');
         return;
     }
 
     if (
-        transcript.includes('finalizar presentacion') ||
-        transcript.includes('terminar presentacion') ||
-        transcript.includes('cerrar presentacion')
+        normalizedTranscript.includes('finalizar presentacion') ||
+        normalizedTranscript.includes('terminar presentacion') ||
+        normalizedTranscript.includes('cerrar presentacion')
     ) {
         confirmFinish();
         addLog('Voz: finalizar presentacion');
         return;
     }
 
-    if (transcript.includes('quitar zoom') || transcript.includes('quitar zum') || transcript.includes('reducir')) {
+    if (
+        normalizedTranscript.includes('quitar zoom') ||
+        normalizedTranscript.includes('quitar zum') ||
+        normalizedTranscript.includes('reducir')
+    ) {
         deactivateZoom();
         addLog('Voz: zoom desactivado');
         return;
     }
-    if (transcript.includes('zoom') || transcript.includes('zum') || transcript.includes('ampliar')) {
+    if (
+        normalizedTranscript.includes('zoom') ||
+        normalizedTranscript.includes('zum') ||
+        normalizedTranscript.includes('ampliar')
+    ) {
         increaseZoom(0.5, 0.5);
         addLog('Voz: zoom activado (' + zoomScale.toFixed(2) + 'x)');
         return;
     }
 
     if (
-        transcript.includes('dejar de dibujar') ||
-        transcript.includes('salir dibujo') ||
-        transcript.includes('desactivar dibujo') ||
-        transcript.includes('desactivar dibujar')
+        normalizedTranscript.includes('dejar de dibujar') ||
+        normalizedTranscript.includes('salir dibujo') ||
+        normalizedTranscript.includes('desactivar dibujo') ||
+        normalizedTranscript.includes('desactivar dibujar')
     ) {
         if (drawingMode) toggleDrawingMode();
         addLog('Voz: dibujo desactivado');
         return;
     }
-    if (transcript.includes('dibujar') || transcript.includes('modo dibujo') || transcript.includes('activar dibujo')) {
+    if (
+        normalizedTranscript.includes('dibujar') ||
+        normalizedTranscript.includes('modo dibujo') ||
+        normalizedTranscript.includes('activar dibujo')
+    ) {
         if (!drawingMode) toggleDrawingMode();
         addLog('Voz: dibujo activado');
         return;
     }
-    if (transcript.includes('borrar') || transcript.includes('limpiar')) {
+    if (normalizedTranscript.includes('borrar') || normalizedTranscript.includes('limpiar')) {
         clearDrawingCanvas();
         addNotification('Pizarra limpiada', false);
         addLog('Voz: borrar dibujo');
@@ -739,22 +976,17 @@ function processVoiceCommand(transcript) {
     }
 
     if (
-        transcript.includes('desactivar subtitulos') ||
-        transcript.includes('desactivar subt?tulos') ||
-        transcript.includes('subtitulos off') ||
-        transcript.includes('subt?tulos off')
+        normalizedTranscript.includes('desactivar subtitulos') ||
+        normalizedTranscript.includes('subtitulos off')
     ) {
         if (subtitlesActive) toggleSubtitles();
         addLog('Voz: subtitulos OFF');
         return;
     }
     if (
-        transcript.includes('activar subtitulos') ||
-        transcript.includes('activar subt?tulos') ||
-        transcript.includes('subtitulos on') ||
-        transcript.includes('subt?tulos on') ||
-        transcript.includes('subtitulos') ||
-        transcript.includes('subt?tulos')
+        normalizedTranscript.includes('activar subtitulos') ||
+        normalizedTranscript.includes('subtitulos on') ||
+        normalizedTranscript.includes('subtitulos')
     ) {
         if (!subtitlesActive) toggleSubtitles();
         addLog('Voz: subtitulos ON');
@@ -806,6 +1038,7 @@ function initSocketListeners() {
         slides = data.slides || slides;
         updateSlideCounter();
         participants = data.participants || [];
+        cameraSnapshots = data.cameraSnapshots || cameraSnapshots;
         renderParticipants(participants);
 
         if (Array.isArray(data.handRaised)) {
@@ -816,6 +1049,16 @@ function initSocketListeners() {
 
     socket.on('participants-updated', (data) => {
         participants = data || [];
+        renderParticipants(participants);
+    });
+
+    socket.on('camera-frame', (data) => {
+        cameraSnapshots[data.userId] = data.frame;
+        renderParticipants(participants);
+    });
+
+    socket.on('camera-frame-cleared', (data) => {
+        delete cameraSnapshots[data.userId];
         renderParticipants(participants);
     });
 
@@ -937,3 +1180,123 @@ function dismissHand(userId) {
     removeHandFromList(userId);
     addNotification('Turno cedido', false);
 }
+
+function buildParticipantCard(participant, expanded) {
+    const item = document.createElement('div');
+    item.className = 'participant-item' + (participant.hasTurn ? ' turn-active' : '');
+
+    const icon = participant.role === 'presenter' ? '🎤' : '👤';
+    const roleLabel = participant.role === 'presenter' ? 'Presentador' : 'Espectador';
+    const hand = participant.handRaised ? '<span class="participant-hand">✋</span>' : '';
+    const cameraFrame = cameraSnapshots[participant.userId];
+    const cameraContent = cameraFrame
+        ? `<img src="${cameraFrame}" alt="Camara de ${participant.name}">`
+        : `<div class="participant-camera-placeholder">${participant.cameraEnabled ? 'Camara activa' : 'Camara apagada'}</div>`;
+
+    item.innerHTML = `
+        <div class="participant-camera">${cameraContent}</div>
+        <div class="participant-main">
+            <span>${icon}</span>
+            <span class="participant-name">${participant.name}</span>
+        </div>
+        <div class="participant-main">
+            <span class="participant-role">${roleLabel}</span>
+            ${hand}
+        </div>
+    `;
+
+    if (!expanded) {
+        item.style.minHeight = '0';
+    }
+
+    return item;
+}
+
+function renderParticipants(list) {
+    const summaryContainer = document.getElementById('participants-list');
+    const galleryContainer = document.getElementById('gallery-grid');
+    if (!summaryContainer || !galleryContainer) return;
+
+    summaryContainer.innerHTML = '';
+    galleryContainer.innerHTML = '';
+
+    list.slice(0, 4).forEach((participant) => {
+        summaryContainer.appendChild(buildParticipantCard(participant, false));
+    });
+
+    list.forEach((participant) => {
+        galleryContainer.appendChild(buildParticipantCard(participant, true));
+    });
+}
+
+function toggleParticipantsView() {
+    galleryExpanded = !galleryExpanded;
+    document.body.classList.toggle('gallery-mode', galleryExpanded);
+    const overlay = document.getElementById('gallery-overlay');
+    if (overlay) {
+        overlay.style.display = galleryExpanded ? 'block' : 'none';
+    }
+}
+
+function setupExtendedPresenterHooks() {
+    const videoEl = document.getElementById('camera-feed');
+    if (videoEl) {
+        videoEl.addEventListener('loadeddata', () => {
+            emitCameraStatus(true);
+            startCameraBroadcast(videoEl);
+        });
+    }
+
+    socket.on('camera-frame', (data) => {
+        cameraSnapshots[data.userId] = data.frame;
+        renderParticipants(participants);
+    });
+
+    socket.on('camera-frame-cleared', (data) => {
+        delete cameraSnapshots[data.userId];
+        renderParticipants(participants);
+    });
+
+    socket.on('poll-started', (data) => {
+        pendingPollQuestion = data.poll.question;
+        pollActive = true;
+        pollOptionsCaptureActive = false;
+        pollDraftOptions = [];
+        pendingPollOption = null;
+        clearTimeout(pollOptionCommitTimer);
+        clearTimeout(pollFinalizeTimer);
+        setPollCaptureStatus('');
+        const previewEl = document.getElementById('poll-draft-preview');
+        if (previewEl) {
+            previewEl.style.display = 'none';
+            previewEl.innerHTML = '';
+        }
+        updatePollDraftPreview();
+    });
+
+    socket.on('poll-ended', () => {
+        pollActive = false;
+        const questionEl = document.getElementById('poll-question-label');
+        if (questionEl && pendingPollQuestion) {
+            questionEl.textContent = `Pregunta: ${pendingPollQuestion} (cerrada)`;
+        }
+        pollOptionsCaptureActive = false;
+        pollDraftOptions = [];
+        pendingPollOption = null;
+        clearTimeout(pollOptionCommitTimer);
+        clearTimeout(pollFinalizeTimer);
+        setPollCaptureStatus('');
+    });
+
+    socket.on('presentation-state', (data) => {
+        cameraSnapshots = data.cameraSnapshots || cameraSnapshots;
+        if (data.currentPoll?.question) {
+            pendingPollQuestion = data.currentPoll.question;
+            document.getElementById('poll-question-label').textContent = `Pregunta: ${pendingPollQuestion}`;
+        }
+        renderParticipants(data.participants || participants);
+    });
+}
+
+window.addEventListener('load', setupExtendedPresenterHooks);
+

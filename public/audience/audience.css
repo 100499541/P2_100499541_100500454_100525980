@@ -355,6 +355,29 @@ body {
     padding-top: 20px;
 }
 
+.section-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.mini-toggle {
+    background: #2a2a4a;
+    color: #ddd;
+    border: 1px solid #3a3a6a;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+
+.mini-toggle:hover {
+    background: #7c6af7;
+    border-color: #7c6af7;
+}
+
 .participants-list {
     display: flex;
     flex-direction: column;
@@ -368,8 +391,7 @@ body {
     padding: 8px 10px;
     font-size: 0.8rem;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
     gap: 10px;
 }
 
@@ -382,8 +404,38 @@ body {
 .participant-main {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     min-width: 0;
+}
+
+.participant-camera {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #0a0a14;
+    border: 1px solid #3a3a6a;
+    position: relative;
+}
+
+.participant-camera img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.participant-camera-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8c88b7;
+    font-size: 0.75rem;
+    text-align: center;
+    padding: 12px;
 }
 
 .participant-name {
@@ -403,6 +455,60 @@ body {
 .participant-hand {
     color: #f39c12;
     flex-shrink: 0;
+}
+
+.gallery-overlay {
+    position: fixed;
+    inset: 76px 280px 20px 20px;
+    background: rgba(10, 10, 20, 0.96);
+    border: 1px solid #2a2a4a;
+    border-radius: 16px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    z-index: 80;
+    padding: 18px;
+}
+
+.gallery-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.gallery-header h3 {
+    margin: 0;
+    color: #7c6af7;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.85rem;
+}
+
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    align-content: start;
+    gap: 14px;
+    height: calc(100% - 56px);
+    overflow-y: auto;
+}
+
+.gallery-grid .participant-item {
+    min-height: 0;
+    height: fit-content;
+}
+
+body.gallery-mode #slide-container {
+    position: fixed;
+    right: 280px;
+    bottom: 24px;
+    width: min(28vw, 380px);
+    z-index: 90;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+body.gallery-mode #sidebar {
+    opacity: 0.92;
 }
 
 @media (min-width: 2200px) {

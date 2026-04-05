@@ -66,6 +66,7 @@ let presentationState = {
     pollVoters: [],       // sockets que ya han votado
 };
 const participants = new Map();
+const cameraSnapshots = new Map();
 
 function getParticipantsSnapshot() {
     return Array.from(participants.values())
@@ -91,6 +92,7 @@ io.on('connection', (socket) => {
         socket.emit('presentation-state', {
             ...presentationState,
             participants: getParticipantsSnapshot(),
+            cameraSnapshots: Object.fromEntries(cameraSnapshots),
         });
     };
 
@@ -109,6 +111,7 @@ io.on('connection', (socket) => {
             name: (data?.name || fallbackName).trim() || fallbackName,
             handRaised: participants.get(socket.id)?.handRaised || false,
             hasTurn: participants.get(socket.id)?.hasTurn || false,
+            cameraEnabled: participants.get(socket.id)?.cameraEnabled || false,
         });
         broadcastParticipants();
     });
@@ -233,7 +236,27 @@ io.on('connection', (socket) => {
 
     socket.on('poll-end', () => {
         presentationState.currentPoll = null;
+        presentationState.pollVoters = [];
         io.emit('poll-ended', { results: presentationState.pollResults });
+    });
+
+    socket.on('camera-status', (data) => {
+        if (!participants.has(socket.id)) return;
+
+        const participant = participants.get(socket.id);
+        participant.cameraEnabled = !!data?.enabled;
+        participants.set(socket.id, participant);
+        broadcastParticipants();
+    });
+
+    socket.on('camera-frame', (data) => {
+        if (!data?.frame) return;
+
+        cameraSnapshots.set(socket.id, data.frame);
+        io.emit('camera-frame', {
+            userId: socket.id,
+            frame: data.frame,
+        });
     });
 
     // ─── ESPECTADORES ─────────────────────────────────────────
@@ -303,8 +326,10 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         presentationState.handRaised = presentationState.handRaised.filter((entry) => entry.userId !== socket.id);
         participants.delete(socket.id);
+        cameraSnapshots.delete(socket.id);
         broadcastParticipants();
         io.emit('hand-lowered', { userId: socket.id });
+        io.emit('camera-frame-cleared', { userId: socket.id });
         console.log(`Desconectado: ${socket.id}`);
     });
 });

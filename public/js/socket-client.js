@@ -96,3 +96,11 @@ function emitRequestPresentationState() {
 function emitRegisterParticipant(role, name) {
     socket.emit('register-participant', { role, name });
 }
+
+function emitCameraStatus(enabled) {
+    socket.emit('camera-status', { enabled });
+}
+
+function emitCameraFrame(frame) {
+    socket.emit('camera-frame', { frame });
+}

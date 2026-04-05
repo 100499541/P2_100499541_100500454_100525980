@@ -141,17 +141,31 @@
             <div id="hands-list"></div>
 
             <h3 style="margin-top:20px">Encuesta</h3>
+            <div id="poll-question-label" class="poll-question-label">Sin encuesta activa</div>
+            <div id="poll-capture-status" class="poll-capture-status" style="display:none"></div>
+            <div id="poll-draft-preview" class="poll-draft-preview" style="display:none"></div>
             <div id="poll-results"></div>
 
             <h3 style="margin-top:20px">Log de comandos</h3>
             <div id="command-log"></div>
 
             <div class="sidebar-bottom">
-                <h3>Usuarios conectados</h3>
+                <div class="section-title-row">
+                    <h3>Usuarios conectados</h3>
+                    <button class="mini-toggle" onclick="toggleParticipantsView()">Intercambiar vista</button>
+                </div>
                 <div id="participants-list" class="participants-list"></div>
             </div>
         </aside>
 
+    </div>
+
+    <div id="gallery-overlay" class="gallery-overlay" style="display:none">
+        <div class="gallery-header">
+            <h3>Usuarios conectados</h3>
+            <button class="mini-toggle" onclick="toggleParticipantsView()">Volver a la presentación</button>
+        </div>
+        <div id="gallery-grid" class="gallery-grid"></div>
     </div>
 
     <!-- OVERLAY DE VOZ -->

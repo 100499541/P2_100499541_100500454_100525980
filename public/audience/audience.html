@@ -64,13 +64,24 @@
                 <div id="notifications"></div>
 
                 <div class="sidebar-bottom">
-                    <h3>Usuarios conectados</h3>
+                    <div class="section-title-row">
+                        <h3>Usuarios conectados</h3>
+                        <button class="mini-toggle" onclick="toggleParticipantsView()">Intercambiar vista</button>
+                    </div>
                     <div id="participants-list" class="participants-list"></div>
                 </div>
             </div>
 
         </main>
 
+    </div>
+
+    <div id="gallery-overlay" class="gallery-overlay" style="display:none">
+        <div class="gallery-header">
+            <h3>Usuarios conectados</h3>
+            <button class="mini-toggle" onclick="toggleParticipantsView()">Volver a la presentación</button>
+        </div>
+        <div id="gallery-grid" class="gallery-grid"></div>
     </div>
 
     <!-- MODAL: introducir nombre -->
