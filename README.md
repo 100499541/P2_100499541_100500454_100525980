@@ -33,4 +33,6 @@ Por último, con la aplicación ejecutandose localmente, introducimos este coman
 ```
 ngrok http 3000
 ```
-Nótese que el puerto es el 3000, que es el mismo que utilizamos para abrir la aplicación localmente.
+*Nótese que el puerto es el 3000, que es el mismo que utilizamos para abrir la aplicación localmente.*
+
+Ngrok nos generará un enlace, que es el que usaremos para abrir la aplicación desde otros dispositivos. Para acceder desde el mismo dispositivo seguimos usando localhost.
