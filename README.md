@@ -15,3 +15,7 @@ Una vez ejecutado recibiremos el siguiente mensaje:
 Servidor corriendo en http://localhost:3000
 ```
 Ahora al acceder a ese enlace podremos ejecutar localmente la aplicación. Se puede abrir varias veces el enlace para simular varios usuarios diferentes, cada uno en una pestaña nueva del navegador.
+
+## Uso de ngrok para utilziar la aplicación en otros dispositivos.
+
+Para probar la aplicación en diferentes dispositivos se utiliza ngrok. Para ello, podemos descargar la version de ejecutable standalone en https://ngrok.com/download/windows?tab=download.
