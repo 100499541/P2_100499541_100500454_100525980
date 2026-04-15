@@ -52,14 +52,14 @@ Ngrok nos generará un enlace, que es el que usaremos para abrir la aplicación 
 
 | Acción | Comando |
 |---|---|
-| Iniciar presentación | "Iniciar presentacion" |
-| Finalizar presentación | "Finalizar presentacion" |
-| Activar cámara | "Activar camara" |
-| Desactivar cámara | "Desactivar camara" |
+| Iniciar presentación | "Iniciar presentación" |
+| Finalizar presentación | "Finalizar presentación" |
+| Activar cámara | "Activar cámara" |
+| Desactivar cámara | "Desactivar cámara" |
 | Activar modo dibujo | "Dibujar" |
 | Desactivar modo dibujo | "Desactivar dibujar" |
-| Activar subtítulos | "Activar subtítulos" |
-| Desactivar subtítulos | "Desactivar subtítulos" |
+| Activar subtítulos | "Activar subtítulos/subtitulos" |
+| Desactivar subtítulos | "Desactivar subtítulos/subtitulos" |
 | Borrar dibujos | "Borrar" / "Limpiar" |
 | Lanzar encuesta | "Lanzar encuesta [pregunta]" |
 | Añadir primera opción | "Opciones [A/1] [respuesta]" |
