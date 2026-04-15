@@ -18,13 +18,13 @@ Ahora al acceder a ese enlace podremos ejecutar localmente la aplicación. Se pu
 
 ## Uso de ngrok para utilizar la aplicación en otros dispositivos.
 
-Para probar la aplicación en diferentes dispositivos se utiliza ngrok. Podemos descargar la version de ejecutable standalone en https://ngrok.com/download/windows?tab=download.
-
-Una vez descargado y extraído el zip necesitamos un token personal. Para ello, debemos registrarnos gratuitamente en la página web oficial de ngrok y obtener nuestro token en el apartado llamado
-"Your Authtoken" (https://dashboard.ngrok.com/get-started/your-authtoken). Generamos un token si no tenemos uno ya y lo copiamos. Alternativamente, se puede descargar mediante el siguiente comando:
+Para probar la aplicación en diferentes dispositivos se utiliza ngrok. Podemos descargar la version de ejecutable standalone en https://ngrok.com/download/windows?tab=download. Alternativamente, también se puede descargar mediante el siguiente comando:
 ```
 winget install ngrok -s msstore
 ```
+
+Una vez descargado y extraído el zip necesitamos un token personal. Para ello, debemos registrarnos gratuitamente en la página web oficial de ngrok y obtener nuestro token en el apartado llamado
+"Your Authtoken" (https://dashboard.ngrok.com/get-started/your-authtoken). Generamos un token si no tenemos uno ya y lo copiamos. 
 Entonces, abrimos el ejecutable que hemos descargado e introducimos el siguiente comando:
 ```
 ngrok config add-authtoken $YOUR_AUTHTOKEN
