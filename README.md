@@ -23,7 +23,7 @@ Para probar la aplicación en diferentes dispositivos se utiliza ngrok. Podemos 
 winget install ngrok -s msstore
 ```
 
-Una vez descargado y extraído el zip necesitamos un token personal. Para ello, debemos registrarnos gratuitamente en la página web oficial de ngrok y obtener nuestro token en el apartado llamado
+Una vez descargado necesitamos un token personal. Para ello, debemos registrarnos gratuitamente en la página web oficial de ngrok y obtener nuestro token en el apartado llamado
 "Your Authtoken" (https://dashboard.ngrok.com/get-started/your-authtoken). Generamos un token si no tenemos uno ya y lo copiamos. 
 Entonces, abrimos el ejecutable que hemos descargado e introducimos el siguiente comando:
 ```
