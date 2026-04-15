@@ -38,3 +38,40 @@ ngrok http 3000
 *Nótese que el puerto es el 3000, que es el mismo que utilizamos para abrir la aplicación localmente.*
 
 Ngrok nos generará un enlace, que es el que usaremos para abrir la aplicación desde otros dispositivos. Para acceder desde el mismo dispositivo seguimos usando localhost.
+
+## Gestos y comandos de voz disponibles
+
+### Comandos de voz (solo presentador)
+
+| Acción | Comando |
+|---|---|
+| Iniciar presentación | "Iniciar presentacion" |
+| Finalizar presentación | "Finalizar presentacion" |
+| Activar cámara | "Activar camara" |
+| Desactivar cámara | "Desactivar camara" |
+| Activar modo dibujo | "Dibujar" |
+| Desactivar modo dibujo | "Desactivar dibujar" |
+| Activar subtítulos | "Activar subtítulos" |
+| Desactivar subtítulos | "Desactivar subtítulos" |
+| Borrar dibujos | "Borrar" / "Limpiar" |
+| Lanzar encuesta | "Lanzar encuesta [pregunta]" |
+| Añadir primera opción | "Opciones [A/1] [respuesta]" |
+| Añadir siguientes opciones | "[B/2] [respuesta]", "[C/3] [respuesta]"... |
+| Cerrar encuesta | "Finalizar encuesta" |
+
+### Gestos del presentador
+
+| Acción | Gesto |
+|---|---|
+| Avanzar diapositiva | Mover dedo índice hacia la derecha |
+| Retroceder diapositiva | Mover dedo índice hacia la izquierda |
+| Dibujar | Mover dedo índice sobre la pantalla con el modo dibujo activo |
+| Zoom in | Pellizco hacia fuera con pulgar e índice |
+| Quitar zoom | Cerrar el puño |
+
+### Gestos del espectador
+
+| Acción | Gesto |
+|---|---|
+| Levantar la mano para turno de palabra | Mostrar la palma abierta hacia la cámara |
+| Responder encuesta | Levantar el número de dedos correspondiente a la opción (1 dedo = A, 2 dedos = B, 3 dedos = C...) |
