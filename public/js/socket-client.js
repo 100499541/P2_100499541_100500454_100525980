@@ -89,6 +89,10 @@ function emitGrantTurn(userId) {
     socket.emit('grant-turn', { userId });
 }
 
+function emitRevokeTurn(userId) {
+    socket.emit('revoke-turn', { userId });
+}
+
 function emitRequestPresentationState() {
     socket.emit('request-presentation-state');
 }

@@ -374,6 +374,22 @@ io.on('connection', (socket) => {
         });
     });
 
+    socket.on('revoke-turn', (data) => {
+        const targetUserId = data?.userId;
+        if (!targetUserId || !participants.has(targetUserId)) return;
+
+        const participant = participants.get(targetUserId);
+        participant.hasTurn = false;
+        participant.micEnabled = false;
+        participants.set(targetUserId, participant);
+        broadcastParticipants();
+
+        io.to(targetUserId).emit('turn-revoked', {
+            userId: targetUserId,
+            revokedBy: socket.id,
+        });
+    });
+
     // ─── DESCONEXIÓN ──────────────────────────────────────────
 
     socket.on('disconnect', () => {

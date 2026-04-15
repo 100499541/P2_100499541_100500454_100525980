@@ -120,7 +120,7 @@ function goToSlide(number) {
 
 function updateSlideCounter() {
     document.getElementById('slide-counter').textContent =
-        `${currentSlide + 1} / ${slides.length}`;
+        `Diapositivas ${currentSlide + 1} / ${slides.length}`;
 }
 
 // =============================================
@@ -944,6 +944,23 @@ function processVoiceCommand(transcript) {
     }
 
     if (
+        normalizedTranscript.includes('desactivar camara') ||
+        normalizedTranscript.includes('apagar camara')
+    ) {
+        if (cameraEnabled) toggleCamera();
+        addLog('Voz: camara OFF');
+        return;
+    }
+    if (
+        normalizedTranscript.includes('activar camara') ||
+        normalizedTranscript.includes('encender camara')
+    ) {
+        if (!cameraEnabled) toggleCamera();
+        addLog('Voz: camara ON');
+        return;
+    }
+
+    if (
         normalizedTranscript.includes('quitar zoom') ||
         normalizedTranscript.includes('quitar zum') ||
         normalizedTranscript.includes('reducir')
@@ -1205,6 +1222,11 @@ function dismissHand(userId) {
     addNotification('Turno cedido', false);
 }
 
+function revokeTurn(userId) {
+    emitRevokeTurn(userId);
+    addNotification('Turno retirado', true);
+}
+
 function buildParticipantCard(participant, expanded) {
     const item = document.createElement('div');
     item.className = 'participant-item' + (participant.hasTurn ? ' turn-active' : '');
@@ -1227,6 +1249,7 @@ function buildParticipantCard(participant, expanded) {
             <span class="participant-role">${roleLabel}</span>
             ${hand}
         </div>
+        ${participant.role === 'audience' && participant.hasTurn ? `<div class="participant-main"><button onclick="revokeTurn('${participant.userId}')">Quitar turno</button></div>` : ''}
     `;
 
     if (!expanded) {

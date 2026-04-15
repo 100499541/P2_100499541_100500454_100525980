@@ -18,7 +18,7 @@ let localAudioStream = null;
 let localAudioTrack = null;
 const audioPeerConnections = new Map();
 const remoteAudioElements = new Map();
-const TURN_DURATION_MS = 2 * 60 * 1000;
+const TURN_DURATION_MS = 3 * 60 * 1000;
 
 // MediaPipe
 let hands = null;
@@ -122,6 +122,18 @@ function initCamera() {
 // DETECCIÓN DE GESTO — LEVANTAR MANO
 // =============================================
 function processAudienceGesture(landmarks) {
+    const pollOption = detectPollVoteGesture(landmarks);
+    if (pollOption && !hasVoted) {
+        const gestureKey = `poll_vote_${pollOption}`;
+        if (gestureKey !== lastHandGesture) {
+            lastHandGesture = gestureKey;
+            clearTimeout(handGestureTimeout);
+            handGestureTimeout = setTimeout(() => { lastHandGesture = ''; }, HAND_GESTURE_COOLDOWN);
+            votePoll(pollOption);
+        }
+        return;
+    }
+
     const gesture = detectAudienceGesture(landmarks);
 
     if (gesture && gesture !== lastHandGesture) {
@@ -148,6 +160,33 @@ function detectAudienceGesture(lm) {
     if (thumbUp && indexUp && middleUp && ringUp && pinkyUp) return 'hand_up';
 
     return null;
+}
+
+function getCurrentPollOptions() {
+    return Array.from(document.querySelectorAll('#poll-options button')).map((btn) => btn.textContent.trim());
+}
+
+function countRaisedFingers(lm) {
+    const thumbExtended = Math.abs(lm[4].x - lm[2].x) > 0.08;
+    const indexUp  = lm[8].y  < lm[6].y;
+    const middleUp = lm[12].y < lm[10].y;
+    const ringUp   = lm[16].y < lm[14].y;
+    const pinkyUp  = lm[20].y < lm[18].y;
+
+    return [thumbExtended, indexUp, middleUp, ringUp, pinkyUp].filter(Boolean).length;
+}
+
+function detectPollVoteGesture(landmarks) {
+    const pollVisible = document.getElementById('poll-section')?.style.display !== 'none';
+    if (!pollVisible || hasVoted) return null;
+
+    const options = getCurrentPollOptions();
+    if (!options.length) return null;
+
+    const fingerCount = countRaisedFingers(landmarks);
+    if (fingerCount < 1 || fingerCount > options.length) return null;
+
+    return options[fingerCount - 1];
 }
 
 // =============================================
@@ -279,6 +318,28 @@ function votePoll(option) {
     addNotification(`\uD83D\uDCCA Votaste: ${option}`, false);
 }
 
+function setPresentationViewForAudience(isPresenting) {
+    const slideSection = document.getElementById('slide-section');
+    const slideImg = document.getElementById('slide-img');
+
+    if (slideSection) {
+        slideSection.style.visibility = isPresenting ? 'visible' : 'hidden';
+    }
+
+    if (!isPresenting && slideImg) {
+        slideImg.removeAttribute('src');
+        slideImg.alt = 'Esperando presentación...';
+        clearDrawingCanvas();
+        applyZoomState(false, { x: 0.5, y: 0.5 }, 1);
+    }
+
+    if (isPresenting && galleryExpanded) {
+        toggleParticipantsView(false);
+    } else if (!isPresenting && !galleryExpanded) {
+        toggleParticipantsView(true);
+    }
+}
+
 function renderPollResults(results, total) {
     const container = document.getElementById('poll-results');
     container.innerHTML = '';
@@ -331,14 +392,16 @@ function initSocketListeners() {
   
     // --- DIAPOSITIVAS -----------------------------------------
     socket.on('presentation-state', (data) => {
+        state.currentSlide = data.currentSlide ?? state.currentSlide;
+        state.isPresenting = data.isPresenting;
         slides = data.slides || [];
-        // Cargar diapositiva actual al conectarse
-        if (slides.length > 0 && data.currentSlide < slides.length) {
+        if (data.isPresenting && slides.length > 0 && data.currentSlide < slides.length) {
             const img = document.getElementById('slide-img');
             img.src = slides[data.currentSlide].url;
         }
         updateSlideCounter(data.currentSlide, data.totalSlides);
         updatePresentingStatus(data.isPresenting);
+        setPresentationViewForAudience(data.isPresenting);
         participants = data.participants || [];
         renderParticipants(participants);
         syncAudienceAudioReceivers();
@@ -354,6 +417,8 @@ function initSocketListeners() {
     });
 
     socket.on('slide-changed', (data) => {
+        state.currentSlide = data.slide;
+        if (!state.isPresenting) return;
         const img = document.getElementById('slide-img');
         if (slides.length > data.slide) {
             img.src = slides[data.slide].url;
@@ -367,7 +432,16 @@ function initSocketListeners() {
     });
 
     socket.on('presentation-toggled', (data) => {
+        state.isPresenting = data.isPresenting;
         updatePresentingStatus(data.isPresenting);
+        setPresentationViewForAudience(data.isPresenting);
+
+        if (data.isPresenting) {
+            const img = document.getElementById('slide-img');
+            if (slides.length > 0 && state.currentSlide < slides.length) {
+                img.src = slides[state.currentSlide].url;
+            }
+        }
     });
 
     socket.on('participants-updated', (data) => {
@@ -455,6 +529,14 @@ function initSocketListeners() {
         playTurnGrantedSound();
     });
 
+    socket.on('turn-revoked', () => {
+        clearTimeout(micTurnTimer);
+        micAllowed = false;
+        disableMicrophone();
+        updateMicButton();
+        addNotification('\u26A0\uFE0F El presentador te ha retirado el turno de palabra', true);
+    });
+
     socket.on('webrtc-offer', (data) => handleAudienceOffer(data.from, data.sdp));
     socket.on('webrtc-answer', (data) => handleAudienceAnswer(data.from, data.sdp));
     socket.on('webrtc-ice-candidate', (data) => handleAudienceIceCandidate(data.from, data.candidate));
@@ -507,10 +589,10 @@ function updateSlide(index, total) {
 
 function updateSlideCounter(index, total) {
     const el = document.getElementById('slide-counter');
-    const parts = el.textContent.split('/').map(s => s.trim());
-    const current = index !== null && index !== undefined ? index + 1 : parts[0];
-    const totalVal = total !== null && total !== undefined ? total : parts[1];
-    el.textContent = `${current} / ${totalVal}`;
+    const currentMatch = el.textContent.match(/(\d+)\s*\/\s*(\d+)/);
+    const current = index !== null && index !== undefined ? index + 1 : (currentMatch ? currentMatch[1] : 0);
+    const totalVal = total !== null && total !== undefined ? total : (currentMatch ? currentMatch[2] : 0);
+    el.textContent = `Diapositivas ${current} / ${totalVal}`;
 }
 
 function updatePresentingStatus(isPresenting) {
@@ -638,8 +720,12 @@ function renderParticipants(list) {
     });
 }
 
-function toggleParticipantsView() {
-    galleryExpanded = !galleryExpanded;
+function toggleParticipantsView(forceState) {
+    if (!state.isPresenting && forceState === false) return;
+    if (!state.isPresenting && typeof forceState !== 'boolean') {
+        forceState = true;
+    }
+    galleryExpanded = typeof forceState === 'boolean' ? forceState : !galleryExpanded;
     document.body.classList.toggle('gallery-mode', galleryExpanded);
     const overlay = document.getElementById('gallery-overlay');
     if (overlay) {
