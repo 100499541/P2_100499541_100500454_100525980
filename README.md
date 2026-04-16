@@ -65,6 +65,8 @@ Ngrok nos generará un enlace, que es el que usaremos para abrir la aplicación 
 | Añadir primera opción | "Opciones [A/1] [respuesta]" |
 | Añadir siguientes opciones | "[B/2] [respuesta]", "[C/3] [respuesta]"... |
 | Cerrar encuesta | "Finalizar encuesta" |
+| Avanzar diapositiva | "Siguiente / Avanzar diapositiva" |
+| Retroceder diapositiva | "Anterior / Retroceder diapositiva" |
 
 ### Gestos del presentador
 
