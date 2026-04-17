@@ -1,9 +1,11 @@
 ﻿// =============================================
 // VARIABLES GLOBALES
 // =============================================
-// Definicion del estado local del espectador.
+// Definicion del estado local del espectador
 // Este bloque concentra la informacion necesaria para gestionar interaccion,
-// presencia audiovisual, participacion y sincronizacion con la sesion remota.
+// presencia audiovisual, participacion y sincronizacion con la sesion remota
+// -------------------- ESTADO GLOBAL DEL ESPECTADOR --------------------
+
 let userName = '';
 let handRaised = false;
 let gestureDetectionActive = false;
@@ -23,7 +25,7 @@ const audioPeerConnections = new Map();
 const remoteAudioElements = new Map();
 const TURN_DURATION_MS = 3 * 60 * 1000;
 
-// Recursos de vision artificial para deteccion gestual.
+// Recursos de vision artificial para deteccion gestual
 // MediaPipe
 let hands = null;
 let camera = null;
@@ -33,16 +35,18 @@ let lastHandGesture = '';
 let handGestureTimeout = null;
 const HAND_GESTURE_COOLDOWN = 2000;
 
-// Estado auxiliar para reconstruir los trazos recibidos del presentador.
+// Estado auxiliar para reconstruir los trazos recibidos del presentador
 // Dibujo recibido del presentador
 let lastReceivedPoint = null;
 
 // =============================================
 // INICIALIZACIÓN
 // =============================================
-// Arranque diferido de la interfaz del espectador.
+// Arranque diferido de la interfaz del espectador
 // La aplicacion espera a disponer de un identificador nominal antes de
-// habilitar las funciones interactivas del cliente.
+// habilitar las funciones interactivas del cliente
+// -------------------- INICIALIZACION --------------------
+
 window.addEventListener('load', () => {
     // El modal de nombre bloquea todo hasta que el usuario confirme
     document.getElementById('name-input').addEventListener('keydown', (e) => {
@@ -53,9 +57,11 @@ window.addEventListener('load', () => {
 // =============================================
 // MODAL DE NOMBRE
 // =============================================
-// Registro inicial del espectador en la sesion.
+// Registro inicial del espectador en la sesion
 // Este apartado valida la identidad visible del usuario y activa los modulos
-// dependientes de camara, sockets y superficies de representacion.
+// dependientes de camara, sockets y superficies de representacion
+// -------------------- REGISTRO DE ESPECTADOR --------------------
+
 function confirmName() {
     const input = document.getElementById('name-input').value.trim();
     if (!input) {
@@ -76,9 +82,11 @@ function confirmName() {
 // =============================================
 // CÁMARA Y MEDIAPIPE
 // =============================================
-// Inicializacion del canal de video local y del analisis gestual.
+// Inicializacion del canal de video local y del analisis gestual
 // Su proposito es capturar la mano del espectador y traducir ciertos gestos
-// en acciones de participacion sobre la presentacion.
+// en acciones de participacion sobre la presentacion
+// -------------------- CAMARA Y MEDIAPIPE --------------------
+
 function initCamera() {
     const videoEl = document.getElementById('camera-feed');
     const canvasEl = document.getElementById('gesture-canvas');
@@ -137,7 +145,9 @@ function initCamera() {
 // =============================================
 // Interpretacion semantica de los gestos de audiencia.
 // Este bloque convierte la informacion geometrica de la mano en eventos de
-// alto nivel, como levantar la mano o votar en una encuesta activa.
+// alto nivel, como levantar la mano o votar en una encuesta activa
+// -------------------- GESTOS DEL ESPECTADOR --------------------
+
 function processAudienceGesture(landmarks) {
     const pollOption = detectPollVoteGesture(landmarks);
     if (pollOption && !hasVoted) {
@@ -173,7 +183,7 @@ function detectAudienceGesture(lm) {
     const ringUp   = lm[16].y < lm[14].y;
     const pinkyUp  = lm[20].y < lm[18].y;
 
-    // MANO ABIERTA (todos los dedos arriba) ? levantar mano
+    // MANO ABIERTA (todos los dedos arriba) levantar mano
     if (thumbUp && indexUp && middleUp && ringUp && pinkyUp) return 'hand_up';
 
     return null;
@@ -209,12 +219,11 @@ function detectPollVoteGesture(landmarks) {
 // =============================================
 // LEVANTAR / BAJAR MANO
 // =============================================
-// Gestion del estado de participacion explicita del espectador.
+// Gestion del estado de participacion explicita del espectador
 // Estas funciones coordinan la interfaz local con el estado remoto asociado
-// a la solicitud de turno de palabra.
-// Gestion del estado de participacion explicita del espectador.
-// Estas funciones coordinan la interfaz local con el estado remoto asociado
-// a la solicitud de turno de palabra.
+// a la solicitud de turno de palabra
+// -------------------- GESTION DE GESTO MANO LEVANTADA --------------------
+
 function toggleHandRaise() {
     if (!handRaised) {
         raiseHand();
@@ -255,12 +264,11 @@ function setHandRaised(active, shouldEmit) {
 // =============================================
 // CANVAS DE DIBUJO (recibido del presentador)
 // =============================================
-// Representacion local de las anotaciones compartidas.
+// Representacion local de las anotaciones compartidas
 // Este apartado reconstruye en el cliente los trazos emitidos por el
-// presentador para preservar el contexto visual de la explicacion.
-// Representacion local de las anotaciones compartidas.
-// Este apartado reconstruye en el cliente los trazos emitidos por el
-// presentador para preservar el contexto visual de la explicacion.
+// presentador para preservar el contexto visual de la explicacion
+// -------------------- DIBUJO RECIBIDO DEL PRESENTADOR --------------------
+
 function initDrawingCanvas() {
     const canvas = document.getElementById('draw-canvas');
     const container = document.getElementById('slide-container');
@@ -309,12 +317,11 @@ function clearDrawingCanvas() {
 // =============================================
 // ENCUESTA
 // =============================================
-// Gestion de la experiencia de voto de la audiencia.
+// Gestion de la experiencia de voto de la audiencia
 // Aqui se renderizan preguntas, opciones y resultados, asi como la logica de
-// participacion unica de cada espectador.
-// Gestion de la experiencia de voto de la audiencia.
-// Aqui se renderizan preguntas, opciones y resultados, asi como la logica de
-// participacion unica de cada espectador.
+// participacion unica de cada espectador
+// -------------------- ENCUESTAS DE LA AUDIENCIA --------------------
+
 function renderPoll(poll, results) {
     const section  = document.getElementById('poll-section');
     const question = document.getElementById('poll-question');
@@ -340,6 +347,8 @@ function renderPoll(poll, results) {
 }
 
 function votePoll(option) {
+    // El voto se registra una sola vez por espectador para mantener la
+    // coherencia de resultados entre interfaz local y servidor
     if (hasVoted) return;
     hasVoted = true;
     emitPollVote(option);
@@ -354,6 +363,8 @@ function votePoll(option) {
 }
 
 function setPresentationViewForAudience(isPresenting) {
+    // Cuando la sesion no esta iniciada se prioriza la vista de participantes,
+    // al reanudarse, la diapositiva vuelve a ocupar el foco principal
     const slideSection = document.getElementById('slide-section');
     const slideImg = document.getElementById('slide-img');
 
@@ -422,12 +433,11 @@ function closePoll(results) {
 // =============================================
 // SOCKET LISTENERS
 // =============================================
-// Sincronizacion reactiva con el servidor.
+// Sincronizacion reactiva con el servidor
 // Este bloque suscribe el cliente a los eventos que actualizan diapositivas,
-// puntero, zoom, dibujo, subtitulos, participacion y audio en tiempo real.
-// Sincronizacion reactiva con el servidor.
-// Este bloque suscribe el cliente a los eventos que actualizan diapositivas,
-// puntero, zoom, dibujo, subtitulos, participacion y audio en tiempo real.
+// puntero, zoom, dibujo, subtitulos, participacion y audio en tiempo real
+// -------------------- EVENTOS DE SOCKET --------------------
+
 function initSocketListeners() {
     emitRequestPresentationState();
   
@@ -588,9 +598,9 @@ function initSocketListeners() {
     });
 }
 
-// Aplicacion visual del estado de zoom compartido.
+// Aplicacion visual del estado de zoom compartido
 // Su funcion consiste en trasladar la ampliacion definida por el presentador
-// a la diapositiva y a la capa de dibujo del espectador.
+// a la diapositiva y a la capa de dibujo del espectador
 function applyZoomState(active, target = { x: 0.5, y: 0.5 }, scale = 1) {
     const overlay = document.getElementById('zoom-overlay');
     overlay.style.display = active ? 'block' : 'none';
@@ -605,8 +615,8 @@ function applyZoomState(active, target = { x: 0.5, y: 0.5 }, scale = 1) {
     });
 }
 
-// Generacion de una señal sonora breve al concederse el turno.
-// Este refuerzo auditivo complementa la notificacion visual del sistema.
+// Generacion de una señal sonora breve al concederse el turno
+// Este refuerzo auditivo complementa la notificacion visual del sistema
 function playTurnGrantedSound() {
     const audio = new AudioContext();
     const osc = audio.createOscillator();
@@ -623,9 +633,11 @@ function playTurnGrantedSound() {
 // =============================================
 // UI HELPERS
 // =============================================
-// Utilidades de representacion y soporte a la interfaz.
+// Utilidades de representacion y soporte a la interfaz
 // Este conjunto de funciones articula la actualizacion visual de la sesion,
-// la galeria de participantes y la gestion audiovisual del espectador.
+// la galeria de participantes y la gestion audiovisual del espectador
+// -------------------- UTILIDADES DE INTERFAZ Y AUDIO --------------------
+
 function updateSlide(index, total) {
     if (index === null && index === undefined) return;
 
@@ -721,6 +733,8 @@ function startAudienceCameraBroadcast(videoEl) {
 }
 
 function buildAudienceParticipantCard(participant, expanded) {
+    // Cada tarjeta resume presencia visual, rol y estado de participacion para
+    // adaptar la galeria tanto a la vista resumida como a la ampliada
     const item = document.createElement('div');
     item.className = 'participant-item' + (participant.hasTurn ? ' turn-active' : '');
 
@@ -886,6 +900,8 @@ function startTurnWindow() {
 }
 
 function createAudiencePeerConnection(remoteId) {
+    // La audiencia recibe o emite audio segun el turno concedido, por lo que
+    // la conexion WebRTC debe poder adaptarse dinamicamente a ese contexto
     const pc = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
     });
@@ -1007,9 +1023,11 @@ async function handleAudienceIceCandidate(from, candidate) {
     } catch {}
 }
 
-// Extensiones audiovisuales y de galeria para el rol de audiencia.
+// Extensiones audiovisuales y de galeria para el rol de audiencia
 // Este bloque integra instantaneas de camara y conexiones de audio WebRTC en
-// la representacion enriquecida de los participantes.
+// la representacion enriquecida de los participantes
+// -------------------- GALERIA Y EXTENSIONES AUDIOVISUALES --------------------
+
 function setupExtendedAudienceHooks() {
     const videoEl = document.getElementById('camera-feed');
     updateCameraButton();

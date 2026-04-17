@@ -1,3 +1,5 @@
+
+// -------------------- SERVIDOR Y DEPENDENCIAS --------------------
 const express = require('express');
 const http = require('http');
 const fs = require('fs/promises');
@@ -11,14 +13,14 @@ const io = new Server(server);
 const PORT = 3000;
 const SLIDES_DIR = path.join(__dirname, 'public', 'slides');
 
-// Configuración de la capa web del sistema.
-// Este apartado publica la interfaz cliente y los recursos estáticos que
-// permiten acceder a la experiencia de presentación desde distintos nodos.
+// Configuración de la capa web del sistema
+// Este apartado publica la interfaz cliente y los recursos estáticos que permiten acceder a la experiencia de presentación desde distintos nodos
 app.use(express.static('public'));
 
-// Obtención y normalización del conjunto de diapositivas.
-// Su finalidad es ofrecer al resto de componentes una colección ordenada y
-// consistente de transparencias disponibles para la sesión.
+// Obtención y normalización del conjunto de diapositivas
+// Su finalidad es ofrecer al resto de componentes una colección ordenada y consistente de transparencias disponibles para la sesión
+
+// -------------------- CARGA Y ORDENACION DE DIAPOSITIVAS --------------------
 async function getSlidesList() {
     try {
         const entries = await fs.readdir(SLIDES_DIR, { withFileTypes: true });
@@ -55,9 +57,10 @@ app.get('/api/slides', async (req, res) => {
     res.json({ slides, total: slides.length });
 });
 
-// Estado compartido de la sesión interactiva.
-// En esta estructura se centraliza la información global que debe mantenerse
-// sincronizada entre presentador, audiencia y servidor.
+// Estado compartido de la sesión interactiva
+// En esta estructura se centraliza la información global que debe mantenerse sincronizada entre presentador, audiencia y servidor
+
+// -------------------- ESTADO COMPARTIDO DE LA SESION --------------------
 let presentationState = {
     currentSlide: 0,
     totalSlides: 0,
@@ -76,9 +79,10 @@ let presentationState = {
 const participants = new Map();
 const cameraSnapshots = new Map();
 
-// Construcción de una instantánea ordenada de participantes.
-// Este bloque genera una representación estable del conjunto de usuarios
-// conectados, priorizando la visibilidad del rol de presentador.
+// Construcción de una instantánea ordenada de participantes
+// Este bloque genera una representación estable del conjunto de usuarios conectados, priorizando la visibilidad del rol de presentador
+
+// -------------------- PARTICIPANTES Y SINCRONIZACION DE ESTADO --------------------
 function getParticipantsSnapshot() {
     return Array.from(participants.values())
         .sort((a, b) => {
@@ -93,9 +97,10 @@ function broadcastParticipants() {
     return snapshot;
 }
 
-// Punto de entrada de la comunicación en tiempo real.
-// Aquí se registran los eventos que articulan la coordinación entre el
-// servidor y los distintos clientes conectados.
+// Punto de entrada de la comunicación en tiempo real
+// Aquí se registran los eventos que articulan la coordinación entre el servidor y los distintos clientes conectados
+
+// -------------------- EVENTOS EN TIEMPO REAL --------------------
 io.on('connection', (socket) => {
     console.log(`Usuario conectado: ${socket.id}`);
     const emitInitialState = async () => {
@@ -132,14 +137,12 @@ io.on('connection', (socket) => {
     });
 
     // Restauración de contexto para incorporaciones tardías.
-    // Este envío permite reconstruir el estado visual e interactivo previo de
-    // la sesión cuando un nuevo cliente se conecta.
-    // Si hay trazos previos, enviarlos al nuevo espectador
+    // Este envío permite reconstruir el estado visual e interactivo previo de la sesión cuando un nuevo cliente se conecta, y si hay trazos previos, enviarlos al nuevo espectador. Si hay encuesta activa, enviarla al nuevo espectador
     if (presentationState.drawingStrokes.length > 0) {
         socket.emit('drawing-history', presentationState.drawingStrokes);
     }
 
-    // Si hay encuesta activa, enviarla al nuevo espectador
+    // Si hay encuesta activa, enviarla al nuevo espectador junto con los resultados actuales
     if (presentationState.currentPoll) {
         socket.emit('poll-started', {
             poll: presentationState.currentPoll,
@@ -150,8 +153,7 @@ io.on('connection', (socket) => {
     // ─── EVENTOS DEL PRESENTADOR ───────────────────────────────
 
     // Gestión de acciones exclusivas del presentador.
-    // Este conjunto de eventos controla la navegación, el estado global de la
-    // presentación y los mecanismos de señalización visual compartida.
+    // Este conjunto de eventos controla la navegación, el estado global de la presentación y las herramientas de apoyo a la exposición, como el puntero o el zoom.
     socket.on('change-slide', (data) => {
         presentationState.currentSlide = data.slide;
         // Al cambiar diapositiva, limpiar trazos
@@ -193,7 +195,7 @@ io.on('connection', (socket) => {
         presentationState.totalSlides = data.total;
         presentationState.slides = Array.isArray(data.slides) ? data.slides : presentationState.slides;
         io.emit('total-slides-set', { total: data.total });
-        // Reenviar estado completo para espectadores que se conecten tarde
+        // Reenviar estado completo para espectadores que se conecten tarde y necesiten esta información
         io.emit('presentation-state', {
             ...presentationState,
             participants: getParticipantsSnapshot(),
@@ -203,16 +205,14 @@ io.on('connection', (socket) => {
     // ─── DIBUJO ───────────────────────────────────────────────
 
     // Sincronización de anotaciones sobre la diapositiva.
-    // Su misión es conservar y redistribuir los trazos para mantener una
-    // pizarra compartida consistente entre todos los clientes.
-    // El presentador emite cada punto mientras dibuja
+    // Su misión es conservar y redistribuir los trazos para mantener una experiencia de dibujo colaborativo entre el presentador y la audiencia, y para reconstruir el contexto visual de la sesión para incorporaciones tardías.
     socket.on('draw-point', (data) => {
         // data: { x, y, isStart, color, width }
         presentationState.drawingStrokes.push(data);
         socket.broadcast.emit('draw-point', data);
     });
 
-    // Limpiar pizarra manualmente
+    // Limpiar pizarra manualmente o al cambiar de diapositiva.
     socket.on('drawing-clear', () => {
         presentationState.drawingStrokes = [];
         io.emit('drawing-cleared');
@@ -220,10 +220,8 @@ io.on('connection', (socket) => {
 
     // ─── SUBTÍTULOS ───────────────────────────────────────────
 
-    // Redistribución de subtítulos en tiempo real.
-    // Este apartado propaga el texto reconocido por voz con fines de apoyo a
-    // la accesibilidad y al seguimiento de la exposición.
-    // El presentador emite el texto reconocido por voz
+    // Creación de subtítulos en tiempo real.
+    // Este apartado propaga el texto reconocido por voz con fines de apoyo a la accesibilidad y la participación de la audiencia, el servidor solo hace de relay, la conexión real es peer-to-peer.
     socket.on('subtitle', (data) => {
         // data: { text }
         socket.broadcast.emit('subtitle', data);
@@ -232,8 +230,7 @@ io.on('connection', (socket) => {
     // ─── ENCUESTA ─────────────────────────────────────────────
 
     // Coordinación del ciclo de vida de las encuestas.
-    // Aquí se inicializan preguntas, se registran votos y se difunden los
-    // resultados agregados de la participación de la audiencia.
+    // Aquí se inicializan preguntas, se registran votos y se difunden los resultados para facilitar la interacción de la audiencia y la obtención de feedback en tiempo real durante la presentación.
     socket.on('poll-start', (data) => {
         // data: { question, options: ['Sí', 'No', ...] }
         presentationState.currentPoll = data;
@@ -271,8 +268,7 @@ io.on('connection', (socket) => {
     });
 
     // Gestión del estado audiovisual de los participantes.
-    // Este bloque mantiene información relativa a cámara, micrófono y
-    // recursos asociados a la presencia ubicua en la sesión.
+    // Este bloque mantiene información relativa a cámara, micrófono y turno de palabra, y la redistribuye para que todos los nodos puedan reflejar correctamente el estado de cada usuario en la interfaz.
     socket.on('camera-status', (data) => {
         if (!participants.has(socket.id)) return;
 
@@ -320,9 +316,9 @@ io.on('connection', (socket) => {
         io.emit('audio-refresh', { userId: socket.id });
     });
 
-    // Señalización necesaria para el establecimiento de WebRTC.
-    // Su propósito es reenviar ofertas, respuestas y candidatos ICE entre los
-    // pares que intercambian audio de forma directa.
+    // Señalización necesaria para el establecimiento de WebRTC
+    // Su propósito es reenviar ofertas, respuestas y candidatos ICE entre los clientes que están negociando una conexión directa para el intercambio de audio y vídeo, 
+    // el servidor solo hace de relay, la conexión real es peer-to-peer
     socket.on('webrtc-offer', (data) => {
         if (!data?.target || !data?.sdp) return;
         io.to(data.target).emit('webrtc-offer', {
@@ -349,9 +345,9 @@ io.on('connection', (socket) => {
 
     // ─── ESPECTADORES ─────────────────────────────────────────
 
-    // Gestión de la participación de la audiencia.
-    // Estos eventos modelan la solicitud y concesión del turno de palabra, así
-    // como la actualización del estado participativo de los espectadores.
+    // Gestión de la participación de la audiencia
+    // Estos eventos modelan la solicitud y concesión del turno de palabra, así como la interacción con herramientas de participación como el levantamiento de mano o las votaciones en encuestas, 
+    // y permiten que tanto el presentador como el resto de espectadores puedan seguir y moderar la participación de la audiencia
     socket.on('raise-hand', (data) => {
         if (!data || !data.name) {
             console.log("⚠️ Usuario sin nombre levantó la mano");
@@ -430,9 +426,9 @@ io.on('connection', (socket) => {
 
     // ─── DESCONEXIÓN ──────────────────────────────────────────
 
-    // Liberación de recursos y limpieza del estado compartido.
-    // Este cierre evita referencias obsoletas cuando un cliente abandona la
-    // sesión y preserva la consistencia del sistema distribuido.
+    // Liberación de recursos y limpieza del estado compartido
+    // Este cierre evita referencias obsoletas cuando un cliente abandona la sesión, eliminando su información de los participantes, 
+    // retirando su mano levantada si la tenía, y notificando al resto de nodos para que actualicen sus interfaces en consecuencia
     socket.on('disconnect', () => {
         presentationState.handRaised = presentationState.handRaised.filter((entry) => entry.userId !== socket.id);
         participants.delete(socket.id);
