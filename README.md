@@ -48,6 +48,8 @@ Ngrok nos generará un enlace, que es el que usaremos para abrir la aplicación 
 
 ## Gestos y comandos de voz disponibles
 
+Estos son todos los comandos de voz y gestos disponibles para el presentador y los espectadores en nuestra aplicación.
+
 ### Comandos de voz (solo presentador)
 
 | Acción | Comando |
