@@ -11,8 +11,14 @@ const io = new Server(server);
 const PORT = 3000;
 const SLIDES_DIR = path.join(__dirname, 'public', 'slides');
 
+// Configuración de la capa web del sistema.
+// Este apartado publica la interfaz cliente y los recursos estáticos que
+// permiten acceder a la experiencia de presentación desde distintos nodos.
 app.use(express.static('public'));
 
+// Obtención y normalización del conjunto de diapositivas.
+// Su finalidad es ofrecer al resto de componentes una colección ordenada y
+// consistente de transparencias disponibles para la sesión.
 async function getSlidesList() {
     try {
         const entries = await fs.readdir(SLIDES_DIR, { withFileTypes: true });
@@ -49,7 +55,9 @@ app.get('/api/slides', async (req, res) => {
     res.json({ slides, total: slides.length });
 });
 
-// Estado compartido
+// Estado compartido de la sesión interactiva.
+// En esta estructura se centraliza la información global que debe mantenerse
+// sincronizada entre presentador, audiencia y servidor.
 let presentationState = {
     currentSlide: 0,
     totalSlides: 0,
@@ -68,6 +76,9 @@ let presentationState = {
 const participants = new Map();
 const cameraSnapshots = new Map();
 
+// Construcción de una instantánea ordenada de participantes.
+// Este bloque genera una representación estable del conjunto de usuarios
+// conectados, priorizando la visibilidad del rol de presentador.
 function getParticipantsSnapshot() {
     return Array.from(participants.values())
         .sort((a, b) => {
@@ -82,6 +93,9 @@ function broadcastParticipants() {
     return snapshot;
 }
 
+// Punto de entrada de la comunicación en tiempo real.
+// Aquí se registran los eventos que articulan la coordinación entre el
+// servidor y los distintos clientes conectados.
 io.on('connection', (socket) => {
     console.log(`Usuario conectado: ${socket.id}`);
     const emitInitialState = async () => {
@@ -117,6 +131,9 @@ io.on('connection', (socket) => {
         broadcastParticipants();
     });
 
+    // Restauración de contexto para incorporaciones tardías.
+    // Este envío permite reconstruir el estado visual e interactivo previo de
+    // la sesión cuando un nuevo cliente se conecta.
     // Si hay trazos previos, enviarlos al nuevo espectador
     if (presentationState.drawingStrokes.length > 0) {
         socket.emit('drawing-history', presentationState.drawingStrokes);
@@ -132,6 +149,9 @@ io.on('connection', (socket) => {
 
     // ─── EVENTOS DEL PRESENTADOR ───────────────────────────────
 
+    // Gestión de acciones exclusivas del presentador.
+    // Este conjunto de eventos controla la navegación, el estado global de la
+    // presentación y los mecanismos de señalización visual compartida.
     socket.on('change-slide', (data) => {
         presentationState.currentSlide = data.slide;
         // Al cambiar diapositiva, limpiar trazos
@@ -182,6 +202,9 @@ io.on('connection', (socket) => {
 
     // ─── DIBUJO ───────────────────────────────────────────────
 
+    // Sincronización de anotaciones sobre la diapositiva.
+    // Su misión es conservar y redistribuir los trazos para mantener una
+    // pizarra compartida consistente entre todos los clientes.
     // El presentador emite cada punto mientras dibuja
     socket.on('draw-point', (data) => {
         // data: { x, y, isStart, color, width }
@@ -197,6 +220,9 @@ io.on('connection', (socket) => {
 
     // ─── SUBTÍTULOS ───────────────────────────────────────────
 
+    // Redistribución de subtítulos en tiempo real.
+    // Este apartado propaga el texto reconocido por voz con fines de apoyo a
+    // la accesibilidad y al seguimiento de la exposición.
     // El presentador emite el texto reconocido por voz
     socket.on('subtitle', (data) => {
         // data: { text }
@@ -205,6 +231,9 @@ io.on('connection', (socket) => {
 
     // ─── ENCUESTA ─────────────────────────────────────────────
 
+    // Coordinación del ciclo de vida de las encuestas.
+    // Aquí se inicializan preguntas, se registran votos y se difunden los
+    // resultados agregados de la participación de la audiencia.
     socket.on('poll-start', (data) => {
         // data: { question, options: ['Sí', 'No', ...] }
         presentationState.currentPoll = data;
@@ -241,6 +270,9 @@ io.on('connection', (socket) => {
         io.emit('poll-ended', { results: presentationState.pollResults });
     });
 
+    // Gestión del estado audiovisual de los participantes.
+    // Este bloque mantiene información relativa a cámara, micrófono y
+    // recursos asociados a la presencia ubicua en la sesión.
     socket.on('camera-status', (data) => {
         if (!participants.has(socket.id)) return;
 
@@ -288,6 +320,9 @@ io.on('connection', (socket) => {
         io.emit('audio-refresh', { userId: socket.id });
     });
 
+    // Señalización necesaria para el establecimiento de WebRTC.
+    // Su propósito es reenviar ofertas, respuestas y candidatos ICE entre los
+    // pares que intercambian audio de forma directa.
     socket.on('webrtc-offer', (data) => {
         if (!data?.target || !data?.sdp) return;
         io.to(data.target).emit('webrtc-offer', {
@@ -314,6 +349,9 @@ io.on('connection', (socket) => {
 
     // ─── ESPECTADORES ─────────────────────────────────────────
 
+    // Gestión de la participación de la audiencia.
+    // Estos eventos modelan la solicitud y concesión del turno de palabra, así
+    // como la actualización del estado participativo de los espectadores.
     socket.on('raise-hand', (data) => {
         if (!data || !data.name) {
             console.log("⚠️ Usuario sin nombre levantó la mano");
@@ -392,6 +430,9 @@ io.on('connection', (socket) => {
 
     // ─── DESCONEXIÓN ──────────────────────────────────────────
 
+    // Liberación de recursos y limpieza del estado compartido.
+    // Este cierre evita referencias obsoletas cuando un cliente abandona la
+    // sesión y preserva la consistencia del sistema distribuido.
     socket.on('disconnect', () => {
         presentationState.handRaised = presentationState.handRaised.filter((entry) => entry.userId !== socket.id);
         participants.delete(socket.id);

@@ -1,6 +1,9 @@
 ﻿// =============================================
 // VARIABLES GLOBALES
 // =============================================
+// Definicion del estado operativo del presentador.
+// Este bloque concentra las variables que gobiernan el flujo de la sesion,
+// los modos de interaccion y la comunicacion audiovisual con la audiencia.
 let slides = [];
 let currentSlide = 0;
 let isPresenting = false;
@@ -13,10 +16,14 @@ let prevIndexX = null;
 let prevIndexY = null;
 let swipeCooldown = false;
 
+// Recursos de vision artificial empleados para la interpretacion gestual.
 // MediaPipe
 let hands = null;
 let camera = null;
 
+// Variables de control para estabilizar la deteccion de gestos.
+// Su funcion es desacoplar eventos consecutivos y almacenar referencias
+// temporales utiles para reconocer movimientos compuestos.
 // Control de gestos
 let lastGesture = '';
 let gestureTimeout = null;
@@ -38,6 +45,9 @@ let localAudioTrack = null;
 const audioPeerConnections = new Map();
 const remoteAudioElements = new Map();
 
+// Estado asociado a la anotacion manual sobre las diapositivas.
+// Permite mantener la coherencia entre el gesto detectado, el canvas local y
+// la senal distribuida al resto de participantes.
 // --- DIBUJO ---------------------------------------------------
 let drawingMode = false;
 let isDrawing = false;
@@ -49,6 +59,7 @@ const DRAW_WIDTH = 4;
 let subtitlesActive = false;
 let subtitleTimeout = null;
 
+// Estado transitorio para la creacion y seguimiento de encuestas por voz.
 // --- ENCUESTA -------------------------------------------------
 let pollActive = false;
 let pendingPollQuestion = null; // guardamos la pregunta mientras esperamos opciones
@@ -63,6 +74,9 @@ const POLL_NEXT_OPTION_WAIT_DELAY = 5000;
 // =============================================
 // INICIALIZACIÓN
 // =============================================
+// Secuencia principal de arranque del puesto del presentador.
+// Se cargan las diapositivas, se registra el rol en la sesion y se activan
+// los modulos de camara, sockets y dibujo necesarios para la exposicion.
 window.addEventListener('load', async () => {
     await loadSlides();
     emitRegisterParticipant('presenter', 'Presentador');
@@ -74,6 +88,9 @@ window.addEventListener('load', async () => {
 // =============================================
 // DIAPOSITIVAS
 // =============================================
+// Gestion del repositorio y la navegacion de diapositivas.
+// Este apartado administra la coleccion disponible y sincroniza cada cambio
+// de transparencia con el resto de clientes conectados.
 async function loadSlides() {
     try {
         const response = await fetch('/api/slides');
@@ -126,6 +143,9 @@ function updateSlideCounter() {
 // =============================================
 // PRESENTACIÓN (inicio / fin)
 // =============================================
+// Control del ciclo de vida de la presentacion.
+// Su finalidad es activar o detener la sesion en directo y habilitar los
+// mecanismos de interaccion asociados al modo de exposicion.
 function togglePresentation() {
     isPresenting = !isPresenting;
     const btn = document.getElementById('btn-start');
@@ -153,6 +173,9 @@ function togglePresentation() {
 // =============================================
 // CÁMARA Y MEDIAPIPE
 // =============================================
+// Inicializacion de captura de video y analisis gestual.
+// Este bloque transforma la imagen de la camara en un flujo de landmarks
+// sobre el que se apoyan puntero, zoom y dibujo gestual.
 function initCamera() {
     const videoEl = document.getElementById('camera-feed');
     const canvasEl = document.getElementById('gesture-canvas');
@@ -211,6 +234,12 @@ function initCamera() {
 // =============================================
 // PROCESAMIENTO DE GESTOS
 // =============================================
+// Interpretacion de gestos del presentador.
+// Aqui se convierten configuraciones de la mano en comandos de navegacion,
+// zoom, puntero o dibujo sobre la presentacion.
+// Interpretacion de gestos del presentador.
+// Aqui se convierten configuraciones de la mano en comandos de navegacion,
+// zoom, puntero o dibujo sobre la presentacion.
 function processGesture(landmarks) {
     // En modo dibujo, el índice dibuja en el canvas
     if (drawingMode) {
@@ -338,6 +367,9 @@ function executeGesture(gesture, landmarks) {
     }
 }
 
+// Difusion periodica de la camara del presentador.
+// Este mecanismo genera instantaneas comprimidas para alimentar la vista
+// resumida de participantes en los distintos clientes.
 function startCameraBroadcast(videoEl) {
     if (cameraBroadcastInterval) clearInterval(cameraBroadcastInterval);
 
@@ -366,6 +398,12 @@ function distanceBetween(a, b) {
 // =============================================
 // PUNTERO EN PANTALLA
 // =============================================
+// Traduccion del gesto indice a un puntero compartido.
+// Su objetivo es proporcionar referencia espacial sincronizada durante la
+// explicacion, tanto en el propio presentador como en la audiencia.
+// Traduccion del gesto indice a un puntero compartido.
+// Su objetivo es proporcionar referencia espacial sincronizada durante la
+// explicacion, tanto en el propio presentador como en la audiencia.
 function updatePointer(landmarks) {
     const slideContainer = document.getElementById('slide-container');
     const rect = slideContainer.getBoundingClientRect();
@@ -410,6 +448,12 @@ function hidePointer() {
 // =============================================
 // ZOOM
 // =============================================
+// Gestion del enfoque ampliado sobre la diapositiva.
+// Este bloque calcula el nivel y el centro del zoom y propaga dicho estado a
+// todos los clientes para mantener una percepcion espacial comun.
+// Gestion del enfoque ampliado sobre la diapositiva.
+// Este bloque calcula el nivel y el centro del zoom y propaga dicho estado a
+// todos los clientes para mantener una percepcion espacial comun.
 function increaseZoom(x, y) {
     zoomTarget = { x, y };
     zoomScale = Math.min(MAX_ZOOM_SCALE, zoomScale + ZOOM_STEP);
@@ -458,6 +502,12 @@ function applyZoomVisual(active, target, scale = 1) {
 // =============================================
 // DIBUJO SOBRE LA DIAPOSITIVA
 // =============================================
+// Anotacion gestual sobre el contenido proyectado.
+// Estas funciones convierten el movimiento de la mano en trazos visibles y
+// distribuidos, facilitando explicaciones incrementales sobre la diapositiva.
+// Anotacion gestual sobre el contenido proyectado.
+// Estas funciones convierten el movimiento de la mano en trazos visibles y
+// distribuidos, facilitando explicaciones incrementales sobre la diapositiva.
 function initDrawingCanvas() {
     const canvas = document.getElementById('draw-canvas');
     const slideContainer = document.getElementById('slide-container');
@@ -553,6 +603,9 @@ function clearDrawingCanvas() {
 // =============================================
 // SUBTÍTULOS
 // =============================================
+// Control local del subtitulado en tiempo real.
+// Su mision es mostrar y difundir fragmentos textuales derivados del discurso
+// oral para reforzar accesibilidad y seguimiento de la exposicion.
 function toggleSubtitles() {
     subtitlesActive = !subtitlesActive;
     const btn = document.getElementById('btn-subtitles');
@@ -589,6 +642,12 @@ function updateSubtitle(text) {
 // =============================================
 // VOZ
 // =============================================
+// Gestion del reconocimiento de voz y de los comandos hablados.
+// Este apartado habilita una modalidad de control multimodal que permite al
+// presentador operar diversas funciones sin interaccion manual directa.
+// Gestion del reconocimiento de voz y de los comandos hablados.
+// Este apartado habilita una modalidad de control multimodal que permite al
+// presentador operar diversas funciones sin interaccion manual directa.
 function toggleVoice() {
     voiceActive = !voiceActive;
     const btn = document.getElementById('btn-voice');
@@ -1027,6 +1086,9 @@ function processVoiceCommand(transcript) {
 // =============================================
 // CONFIRMACIÓN DE SALIDA
 // =============================================
+// Cierre controlado de la sesion de presentacion.
+// Se solicita confirmacion explicita antes de detener los subsistemas activos
+// y comunicar al resto de clientes la finalizacion de la exposicion.
 function confirmFinish() {
     const confirmed = confirm('¿Finalizar la presentación?');
     if (confirmed) {
@@ -1043,6 +1105,8 @@ function confirmFinish() {
 // =============================================
 // PANTALLA COMPLETA
 // =============================================
+// Gestion del modo de visualizacion inmersiva.
+// Gestion del modo de visualizacion inmersiva.
 function toggleFullscreen() {
     if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen();
@@ -1054,6 +1118,12 @@ function toggleFullscreen() {
 // =============================================
 // SOCKET LISTENERS
 // =============================================
+// Subscripcion a eventos de coordinacion en tiempo real.
+// Este bloque mantiene actualizado el estado del presentador respecto a la
+// audiencia, la participacion, la galeria audiovisual y las encuestas.
+// Subscripcion a eventos de coordinacion en tiempo real.
+// Este bloque mantiene actualizado el estado del presentador respecto a la
+// audiencia, la participacion, la galeria audiovisual y las encuestas.
 function initSocketListeners() {
     socket.on('hand-raised', (data) => {
         addHandToList(data.userId, data.name);
@@ -1121,6 +1191,9 @@ function initSocketListeners() {
 // =============================================
 // UI — ENCUESTA (panel del presentador)
 // =============================================
+// Representacion agregada de resultados de encuesta.
+// Su funcion consiste en resumir visualmente la participacion del publico en
+// el panel de control del presentador.
 function updatePollResults(results, total) {
     const container = document.getElementById('poll-results');
     if (!container) return;
@@ -1153,6 +1226,9 @@ function updatePollResults(results, total) {
 // =============================================
 // UI HELPERS
 // =============================================
+// Utilidades de interfaz y comunicacion audiovisual avanzada.
+// Este conjunto reune la mensajeria visual, la gestion de participantes y la
+// infraestructura WebRTC que complementa la sesion principal.
 function addNotification(message, isAlert) {
     const container = document.getElementById('notifications');
     const el = document.createElement('div');
@@ -1491,6 +1567,9 @@ async function handleIceCandidate(from, candidate) {
     } catch {}
 }
 
+// Integracion de extensiones audiovisuales del puesto del presentador.
+// Este bloque sincroniza miniaturas de camara, estado de encuesta y audio
+// distribuido con la interfaz ampliada de control de la sesion.
 function setupExtendedPresenterHooks() {
     const videoEl = document.getElementById('camera-feed');
     updateCameraButton();
